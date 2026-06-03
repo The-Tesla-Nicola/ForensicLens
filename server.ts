@@ -83,7 +83,7 @@ async function startServer() {
 
   app.post("/api/analyze", analysisLimiter, async (req, res) => {
     try {
-      const { imageBase64, mimeType, deepScan } = req.body;
+      const { imageBase64, mimeType, deepScan, extractStyle } = req.body;
 
       if (!imageBase64) {
         return res.status(400).json({ error: "No image provided" });
@@ -193,6 +193,17 @@ Provide your findings in this exact JSON structure:
   "forensicSummary": string,
   "finalVerdict": string
 }`;
+      }
+
+      if (extractStyle) {
+        prompt += `\n\nAfter completing the forensic analysis, also extract style keywords from this image.
+Output the following ADDITIONAL fields:
+"styleKeywords": string[],
+"likelyArtistReferences": string[],
+"mediumEstimate": string,
+"lightingDescription": string
+
+For each keyword, indicate confidence as "high", "medium", or "low".`;
       }
 
       // Run ELA before Gemini

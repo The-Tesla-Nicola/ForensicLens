@@ -86,6 +86,7 @@ export default function App() {
   
   const [singleDeepScan, setSingleDeepScan] = useState(false);
   const [batchDeepScan, setBatchDeepScan] = useState(false);
+  const [extractStyle, setExtractStyle] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -205,7 +206,7 @@ export default function App() {
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, mimeType, deepScan: singleDeepScan }),
+        body: JSON.stringify({ imageBase64: base64, mimeType, deepScan: singleDeepScan, extractStyle }),
       });
 
       if (!response.ok) throw new Error('Analysis failed.');
@@ -625,6 +626,10 @@ export default function App() {
                         <input type="checkbox" checked={singleDeepScan} onChange={(e) => setSingleDeepScan(e.target.checked)} className="accent-[#F27D26]" />
                         <span className="text-xs uppercase font-bold tracking-widest text-white/70">Enable Deep Scan <span className="text-[9px] opacity-50">(Noise Analysis & Edge Gradient)</span></span>
                       </label>
+                      <label className="flex items-center gap-2 cursor-pointer bg-[#0A0A0A] p-3 rounded-xl border border-[#141414] hover:border-[#F27D26] transition-all">
+                        <input type="checkbox" checked={extractStyle} onChange={(e) => setExtractStyle(e.target.checked)} className="accent-[#F27D26]" />
+                        <span className="text-xs uppercase font-bold tracking-widest text-white/70">Extract Style <span className="text-[9px] opacity-50">(Experimental — Low Confidence)</span></span>
+                      </label>
                       <button
                         onClick={runAnalysis}
                         className="w-full py-4 bg-[#F27D26] text-black font-bold uppercase tracking-widest rounded-xl hover:bg-[#ff9447] transition-all flex items-center justify-center gap-3 active:scale-95 shadow-lg shadow-[#F27D26]/20"
@@ -701,6 +706,23 @@ export default function App() {
                               </span>
                             </div>
                             <p className="text-[9px] mt-2 opacity-30">Higher scores suggest image splicing or editing</p>
+                          </div>
+                        )}
+                        {(result as any).styleKeywords && (result as any).styleKeywords.length > 0 && (
+                          <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
+                            <p className="text-[9px] uppercase font-mono text-[#F27D26] mb-2">Style Analysis <span className="text-[8px] opacity-50">(Experimental — Low Confidence)</span></p>
+                            <p className="text-[9px] opacity-50 mb-2">This feature is experimental. Results may not be accurate.</p>
+                            <div className="flex flex-wrap gap-1">
+                              {(result as any).styleKeywords.map((kw: string, i: number) => (
+                                <span key={i} className="text-[10px] px-2 py-1 bg-[#F27D26]/10 text-[#F27D26] rounded">{kw}</span>
+                              ))}
+                            </div>
+                            {(result as any).mediumEstimate && (
+                              <p className="text-[10px] mt-2 opacity-60">Estimated medium: <span className="font-bold">{(result as any).mediumEstimate}</span></p>
+                            )}
+                            {(result as any).lightingDescription && (
+                              <p className="text-[10px] opacity-60">Lighting: <span className="font-bold">{(result as any).lightingDescription}</span></p>
+                            )}
                           </div>
                         )}
                         {exifData && <MetadataPanel data={exifData} />}
