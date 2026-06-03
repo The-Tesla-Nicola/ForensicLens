@@ -32,10 +32,10 @@ import {
   Trash2
 } from 'lucide-react';
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import MetadataPanel from './components/MetadataPanel';
+import { generateForensicReport } from './utils/pdfGenerator';
 
 // Extend jsPDF for autoTable (no longer needed, but removing cleanup)
 
@@ -260,56 +260,28 @@ export default function App() {
     }
   };
 
-  const generatePDF = (item?: BatchResult) => {
-    const data = item || (result as any);
+  const handleGeneratePDF = (item?: BatchResult) => {
+    const data = item || result;
     const img = item ? item.thumbnail : selectedImage;
     if (!data || !img) return;
 
-    const doc = new jsPDF();
-    const date = new Date().toLocaleString();
-    const forensicID = `FG-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    const doc = generateForensicReport({
+      classification: data.classification,
+      aiLikelihood: data.aiLikelihood,
+      realLikelihood: data.realLikelihood,
+      editedLikelihood: data.editedLikelihood,
+      consistencyScore: data.consistencyScore,
+      confidenceLevel: data.confidenceLevel,
+      keyEvidence: data.keyEvidence,
+      detectedIssues: data.detectedIssues,
+      forensicSummary: data.forensicSummary,
+      finalVerdict: data.finalVerdict,
+      mostLikelySource: data.mostLikelySource,
+      filename: (data as any).filename || 'evidence',
+      hash: exifData?.hash,
+    }, img);
 
-    doc.setFillColor(5, 5, 5);
-    doc.rect(0, 0, 210, 40, 'F');
-    doc.setTextColor(242, 125, 38);
-    doc.setFontSize(22);
-    doc.text("FORENSICGUARD AI", 15, 20);
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.text("DIGITAL FORENSICS & IMAGE AUTHENTICATION REPORT", 15, 30);
-    doc.text(`CASE ID: ${forensicID}`, 140, 30);
-
-    const metadata = [
-      ["Report Date/Time", date],
-      ["Filename", (data as any).filename || "evidence_single.jpg"],
-      ["Classification", data.classification.toUpperCase()],
-      ["Confidence Level", data.confidenceLevel.toUpperCase()],
-      ["AI Likelihood", `${data.aiLikelihood}%`],
-      ["Real Likelihood", `${data.realLikelihood}%`],
-      ["Consistency Score", `${data.consistencyScore}%`]
-    ];
-
-    autoTable(doc, {
-      startY: 45,
-      head: [["Attribute", "Value"]],
-      body: metadata,
-      theme: 'striped',
-      headStyles: { fillType: 'solid', fillColor: [20, 20, 20], textColor: [242, 125, 38] },
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(20, 20, 20);
-    doc.text("EXECUTIVE FORENSIC SUMMARY", 15, finalY);
-    
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    const splitSummary = doc.splitTextToSize(data.forensicSummary, 180);
-    doc.text(splitSummary, 15, finalY + 10);
-
-    doc.save(`Forensic_Report_${forensicID}.pdf`);
+    doc.save(`ForensicTrace_Report_${Date.now()}.pdf`);
   };
 
   const exportCaseArchive = async () => {
@@ -559,7 +531,7 @@ export default function App() {
 
                   {result && (
                     <div className="flex gap-4">
-                      <button onClick={() => generatePDF()} className="flex-1 py-3 bg-[#141414] border border-[#F27D26]/30 text-white font-bold uppercase tracking-widest text-xs rounded-xl hover:bg-[#1f1f1f] transition-all flex items-center justify-center gap-2">
+                      <button onClick={() => handleGeneratePDF()} className="flex-1 py-3 bg-[#141414] border border-[#F27D26]/30 text-white font-bold uppercase tracking-widest text-xs rounded-xl hover:bg-[#1f1f1f] transition-all flex items-center justify-center gap-2">
                         <FileText className="w-4 h-4 text-[#F27D26]" /> Generate Court Report
                       </button>
                       <button onClick={exportCaseArchive} disabled={isExporting} className="flex-1 py-3 bg-[#141414] border border-white/10 text-white font-bold uppercase tracking-widest text-xs rounded-xl hover:bg-[#1f1f1f] transition-all flex items-center justify-center gap-2 disabled:opacity-50">
@@ -780,7 +752,7 @@ export default function App() {
                             <div className="flex justify-end gap-2">
                               {item.status === 'completed' && (
                                 <button 
-                                  onClick={() => generatePDF(item)}
+                                  onClick={() => handleGeneratePDF(item)}
                                   className="p-2 hover:text-[#F27D26] transition-colors bg-white/5 rounded-lg border border-white/5"
                                   title="Export Report"
                                 >
