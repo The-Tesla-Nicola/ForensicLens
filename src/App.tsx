@@ -80,6 +80,7 @@ export default function App() {
   const [filterClassification, setFilterClassification] = useState<string>('all');
   
   const [deepScan, setDeepScan] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,6 +162,17 @@ export default function App() {
 
     setBatchResults(prev => [...newItems, ...prev]);
   };
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isAnalyzing) {
+      setElapsedSeconds(0);
+      interval = setInterval(() => {
+        setElapsedSeconds(s => s + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isAnalyzing]);
 
   const runAnalysis = async () => {
     if (!selectedImage) return;
@@ -479,13 +491,33 @@ export default function App() {
                     )}
                   </div>
 
-                  {!result && !isAnalyzing && (
+                  {error && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3"
+                    >
+                      <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-red-500 uppercase tracking-wider">Analysis Error</p>
+                        <p className="text-xs opacity-80 mt-1">{error}</p>
+                      </div>
+                      <button
+                        onClick={() => setError(null)}
+                        className="text-red-400 hover:text-red-300 text-xs font-bold uppercase"
+                      >
+                        Dismiss
+                      </button>
+                    </motion.div>
+                  )}
+
+                  {!result && !isAnalyzing && !error && (
                     <div className="flex flex-col gap-4">
                       <label className="flex items-center gap-2 cursor-pointer bg-[#0A0A0A] p-3 rounded-xl border border-[#141414] hover:border-[#F27D26] transition-all">
                         <input type="checkbox" checked={deepScan} onChange={(e) => setDeepScan(e.target.checked)} className="accent-[#F27D26]" />
                         <span className="text-xs uppercase font-bold tracking-widest text-white/70">Enable Deep Scan <span className="text-[9px] opacity-50">(Noise Analysis & Edge Gradient)</span></span>
                       </label>
-                      <button 
+                      <button
                         onClick={runAnalysis}
                         className="w-full py-4 bg-[#F27D26] text-black font-bold uppercase tracking-widest rounded-xl hover:bg-[#ff9447] transition-all flex items-center justify-center gap-3 active:scale-95 shadow-lg shadow-[#F27D26]/20"
                       >
@@ -495,10 +527,20 @@ export default function App() {
                     </div>
                   )}
 
+                  {error && !result && (
+                    <button
+                      onClick={runAnalysis}
+                      className="w-full py-3 bg-[#141414] border border-[#F27D26]/30 text-[#F27D26] font-bold uppercase tracking-widest text-xs rounded-xl hover:bg-[#1f1f1f] transition-all flex items-center justify-center gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Retry Analysis
+                    </button>
+                  )}
+
                   {isAnalyzing && (
                     <div className="p-6 border border-[#141414] rounded-xl bg-[#0A0A0A] space-y-4">
                       <div className="flex justify-between items-center text-[10px] font-mono text-[#F27D26] uppercase">
-                        <span>Processing Neural Weights</span>
+                        <span>Analyzing... {elapsedSeconds}s</span>
                         <Activity className="w-3 h-3 animate-pulse" />
                       </div>
                       <div className="h-1 bg-[#141414] rounded-full overflow-hidden">

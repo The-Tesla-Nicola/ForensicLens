@@ -150,54 +150,91 @@ Provide your findings in the following JSON structure:
         prompt += `\n\n[DENSE-SCAN ENABLED] Perform the highest-precision forensic analysis. Pay obsessive attention to PRNU signatures, anomalous edge-gradient discontinuities, generative pattern signatures, and possible latent noise pattern artifacts commonly found in AI-models. Be more critical and strictly analytical.`;
       }
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: mimeType || "image/jpeg",
-                  data: imageBase64
-                }
-              }
-            ]
-          }
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              classification: { type: Type.STRING },
-              aiLikelihood: { type: Type.NUMBER },
-              realLikelihood: { type: Type.NUMBER },
-              editedLikelihood: { type: Type.NUMBER },
-              consistencyScore: { type: Type.NUMBER },
-              confidenceLevel: { type: Type.STRING },
-              keyEvidence: { 
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              detectedIssues: { 
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              },
-              mostLikelySource: { type: Type.STRING },
-              forensicSummary: { type: Type.STRING },
-              finalVerdict: { type: Type.STRING }
-            },
-            required: ["classification", "aiLikelihood", "realLikelihood", "editedLikelihood", "consistencyScore", "confidenceLevel", "keyEvidence", "detectedIssues", "mostLikelySource", "forensicSummary", "finalVerdict"]
-          }
-        }
-      });
+      const MAX_RETRIES = 1;
+      let lastError: any;
+      let analysis: any;
 
-      const analysis = JSON.parse(response.text || "{}");
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const response = await ai.models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: [
+              {
+                parts: [
+                  { text: prompt },
+                  {
+                    inlineData: {
+                      mimeType: mimeType || "image/jpeg",
+                      data: imageBase64
+                    }
+                  }
+                ]
+              }
+            ],
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  classification: { type: Type.STRING },
+                  aiLikelihood: { type: Type.NUMBER },
+                  realLikelihood: { type: Type.NUMBER },
+                  editedLikelihood: { type: Type.NUMBER },
+                  consistencyScore: { type: Type.NUMBER },
+                  confidenceLevel: { type: Type.STRING },
+                  keyEvidence: { 
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  detectedIssues: { 
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  mostLikelySource: { type: Type.STRING },
+                  forensicSummary: { type: Type.STRING },
+                  finalVerdict: { type: Type.STRING }
+                },
+                required: ["classification", "aiLikelihood", "realLikelihood", "editedLikelihood", "consistencyScore", "confidenceLevel", "keyEvidence", "detectedIssues", "mostLikelySource", "forensicSummary", "finalVerdict"]
+              }
+            }
+          });
+
+          try {
+            analysis = JSON.parse(response.text || "{}");
+            if (!analysis.classification) {
+              throw new Error("Missing classification in response");
+            }
+          } catch (parseError) {
+            console.error("Gemini JSON parse failed:", response.text?.substring(0, 200));
+            return res.status(502).json({
+              error: "Analysis engine returned malformed response",
+              fallback: true
+            });
+          }
+
+          break;
+        } catch (err: any) {
+          lastError = err;
+          if (err.status === 429 || err.status === 503) {
+            if (attempt < MAX_RETRIES) {
+              await new Promise(r => setTimeout(r, 2000));
+              continue;
+            }
+          }
+          throw err;
+        }
+      }
+
       res.json(analysis);
 
     } catch (error: any) {
       console.error("Analysis Error:", error);
+      if (error.message?.includes('timeout') || error.code === 'ETIMEDOUT') {
+        return res.status(504).json({ error: "Analysis timed out. Please try a smaller image." });
+      }
+      if (error.status === 429) {
+        return res.status(429).json({ error: "API rate limit exceeded. Please wait and try again." });
+      }
       res.status(500).json({ error: error.message || "Failed to analyze image" });
     }
   });
@@ -216,6 +253,11 @@ Provide your findings in the following JSON structure:
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  app.use('/api/analyze', (req, res, next) => {
+    req.setTimeout(35000);
+    next();
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Forensic Server running on http://localhost:${PORT}`);
