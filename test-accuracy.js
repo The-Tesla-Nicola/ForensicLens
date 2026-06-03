@@ -35,6 +35,8 @@ function testImage(filePath, expected) {
             confidence: result.confidenceLevel,
             aiScore: result.aiLikelihood,
             realScore: result.realLikelihood,
+            elaScore: result.elaScore,
+            elaInterpretation: result.elaInterpretation,
             correct: result.classification === expected
           });
         } catch (e) {

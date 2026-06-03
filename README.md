@@ -1,20 +1,35 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# ForensicTrace — Digital Image Forensics Tool
 
-# Run and deploy your AI Studio app
+AI-powered digital forensics tool for detecting AI-generated vs real images, extracting metadata, and generating forensic reports.
 
-This contains everything you need to run your app locally.
+## Quick Start
 
-View your app in AI Studio: https://ai.studio/apps/eba90221-97ba-4c8e-a3ec-e0bbc662279c
+1. `npm install`
+2. Set `GEMINI_API_KEY` in `.env`
+3. `npm run dev`
 
-## Run Locally
+## Features
 
-**Prerequisites:**  Node.js
+- Single image AI/Real classification with confidence scoring
+- Deep Scan mode (3-pass analysis for high precision)
+- EXIF metadata extraction (camera, GPS, software traces)
+- SHA-256 integrity hashing
+- Error Level Analysis (ELA) for tamper detection
+- Style keyword extraction (experimental)
+- PDF forensic report generation with chain of custody
+- Batch analysis with progress tracking
+- CSV / PDF / ZIP batch export
+- Filterable, sortable batch results table
 
+## Accuracy
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+See [docs/accuracy.md](docs/accuracy.md) for current baseline.
+
+## Limitations
+
+See [docs/limitations.md](docs/limitations.md).
+
+## Disclaimer
+
+This tool is for research and investigative purposes only.
+Not admissible as sole evidence in legal proceedings.

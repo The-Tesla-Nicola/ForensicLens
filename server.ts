@@ -33,9 +33,7 @@ async function startServer() {
   const analysisLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 10,
-    message: { error: "Too many requests. Please wait before analyzing more images." },
-    standardHeaders: true,
-    legacyHeaders: false,
+    message: "Too many requests. Please wait before analyzing more images.",
   });
 
   // API Routes
