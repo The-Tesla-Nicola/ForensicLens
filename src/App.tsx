@@ -14,7 +14,6 @@ import {
   Eye, 
   Maximize2,
   RefreshCw,
-  FileSearch,
   Crosshair,
   Binary,
   FileText,
@@ -35,6 +34,8 @@ import { jsPDF } from "jspdf";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import MetadataPanel from './components/MetadataPanel';
+import VerdictCard from './components/VerdictCard';
+import EvidenceList from './components/EvidenceList';
 import { generateForensicReport } from './utils/pdfGenerator';
 
 // Extend jsPDF for autoTable (no longer needed, but removing cleanup)
@@ -547,46 +548,20 @@ export default function App() {
                   <AnimatePresence mode="wait">
                     {result ? (
                       <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                        <div className={`p-6 rounded-2xl border ${result.classification === 'AI-generated' ? 'border-orange-500/30 bg-orange-500/5' : result.classification === 'Real' ? 'border-green-500/30 bg-green-500/5' : 'border-white/10 bg-white/5'}`}>
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <p className="text-[10px] uppercase font-mono opacity-50 tracking-widest">Final Classification</p>
-                                {result.deepScan && (
-                                  <span className="px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest bg-[#F27D26]/20 text-[#F27D26] border border-[#F27D26]/30 rounded">DEEP SCAN</span>
-                                )}
-                              </div>
-                              <h3 className={`text-4xl font-black uppercase italic tracking-tighter ${result.classification === 'AI-generated' ? 'text-[#F27D26]' : result.classification === 'Real' ? 'text-green-500' : 'text-white'}`}>
-                                {result.classification}
-                              </h3>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-[10px] uppercase font-mono opacity-50 tracking-widest mb-1">AI Likelihood</p>
-                              <span className="text-3xl font-mono font-bold leading-none">{result.aiLikelihood}%</span>
-                            </div>
-                          </div>
-                          <div className="mt-4 flex gap-4">
-                            <div className="flex-1 text-center">
-                                <p className="text-[9px] uppercase opacity-40">Real</p>
-                                <p className="text-sm font-mono font-bold text-green-500">{result.realLikelihood}%</p>
-                            </div>
-                            <div className="flex-1 text-center border-l border-white/5">
-                                <p className="text-[9px] uppercase opacity-40">Edited</p>
-                                <p className="text-sm font-mono font-bold text-yellow-500">{result.editedLikelihood}%</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
-                          <div className="flex items-center gap-2 mb-3 text-[10px] font-mono text-[#F27D26] uppercase tracking-widest"><FileSearch className="w-4 h-4" /> Forensic Evidence/Issues</div>
-                          <ul className="space-y-2">
-                            {result.keyEvidence.map((ind, i) => (
-                              <li key={i} className="text-xs flex gap-3 opacity-80"><span className="text-[#F27D26]">✓</span>{ind}</li>
-                            ))}
-                            {result.detectedIssues.map((ind, i) => (
-                              <li key={i} className="text-xs flex gap-3 opacity-80"><span className="text-red-500">!</span>{ind}</li>
-                            ))}
-                          </ul>
-                        </div>
+                        <VerdictCard
+                          classification={result.classification}
+                          aiLikelihood={result.aiLikelihood}
+                          realLikelihood={result.realLikelihood}
+                          editedLikelihood={result.editedLikelihood}
+                          consistencyScore={result.consistencyScore}
+                          confidenceLevel={result.confidenceLevel}
+                          deepScan={result.deepScan}
+                        />
+                        <EvidenceList
+                          keyEvidence={result.keyEvidence}
+                          detectedIssues={result.detectedIssues}
+                          forensicSummary={result.forensicSummary}
+                        />
                         {exifData && <MetadataPanel data={exifData} />}
                       </motion.div>
                     ) : (
