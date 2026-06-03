@@ -104,34 +104,46 @@ async function startServer() {
         return res.status(400).json({ error: `Unsupported file type. Allowed: ${ALLOWED_MIME_TYPES.join(', ')}` });
       }
 
-      let prompt = `Act as an Elite Digital Image Forensics Expert and AI-Generated Content Detection Analyst.
+      const FEW_SHOT_EXAMPLES = `
+Here are reference examples to guide your analysis:
 
-Analyze the given image and perform a rigorous, step-by-step forensic investigation to determine its origin.
+EXAMPLE 1 — REAL PHOTO:
+A photograph of a cat sitting on a windowsill. Natural sunlight creating soft shadows.
+EXIF data shows: Camera: Sony A7III, ISO 400, f/2.8, 1/125s.
+Noise pattern: Natural grain, higher in shadows.
+Verdict: Real (98% confidence)
 
-Use this 7-step forensic analysis protocol:
+EXAMPLE 2 — AI GENERATED:
+A portrait of a woman with smooth, poreless skin. Background has warped bricks. Fingers appear fused.
+EXIF: No camera data. Software field: "Midjourney".
+Noise: Uniform across entire image, no natural grain pattern.
+Verdict: AI-generated (97% confidence)
 
-STEP 1 — VISUAL FORENSIC ANALYSIS
-Inspect for anatomical inconsistencies (fingers, limbs, facial asymmetry, eyes), texture artifacts (over-smooth skin, artificial fabric/hair), lighting/shadow inconsistencies, background integrity (warped structures, repeated patterns), and depth/perspective distortions.
+EXAMPLE 3 — EDITED PHOTO:
+A landscape photo with obvious clone-stamped clouds. EXIF shows camera data but JPEG compression
+artifacts are inconsistent near the edited region.
+Verdict: Edited (85% confidence)
+`;
 
-STEP 2 — AI ARTIFACT DETECTION
-Detect generation signatures: diffusion artifacts, GAN texture patterns, checkerboard artifacts, noise inconsistency, synthetic bokeh, hallucinated objects, or text rendering failures. Identify if it looks like Midjourney, Stable Diffusion, DALL·E, Flux.
+      let prompt = `Act as an Elite Digital Image Forensics Expert.
 
-STEP 3 — IMAGE COMPRESSION & METADATA
-Analyze JPEG compression, EXIF metadata, camera evidence, software traces, and metadata tampering. Determine if metadata is authentic, stripped, or suggests manipulation.
+${FEW_SHOT_EXAMPLES}
 
-STEP 4 — STATISTICAL FORENSICS
-Perform logical statistical image analysis (pixel-level noise check, frequency domain, PRNU/sensor-trace likelihood, edge coherence). 
+Now analyze the provided image following this protocol:
 
-STEP 5 — CONTEXTUAL AUTHENTICITY CHECK
-Evaluate contextual realism (human posture, environmental coherence, physics of objects/clothing).
+1. VISUAL ANALYSIS: Check anatomy, lighting, shadows, textures, background coherence
+2. AI ARTIFACTS: Diffusion noise, GAN artifacts, synthetic bokeh, text rendering failures
+3. COMPRESSION & METADATA: JPEG artifacts, EXIF presence/absence, software signatures
+4. STATISTICAL ANALYSIS: Noise uniformity, edge coherence, color distribution
+5. FINAL VERDICT
 
-STEP 6 — FINAL VERDICT AND SCORING
-Calculate likelihood percentages for "AI-generated", "Real", "Edited", and "Uncertain". Provide a final classification and a consistency score (0-100).
+IMPORTANT RULES:
+- If you are less than 60% confident, classify as "Mixed/Uncertain"
+- Every evidence point must specify if it's STRONG, MODERATE, or WEAK evidence
+- Do NOT guess. If you cannot determine, say so.
+- Base your confidence level on: how many evidence points support the verdict vs contradict it
 
-STEP 7 — PROFESSIONAL FORENSIC SUMMARY
-Generate a concise expert summary suitable for high-stakes investigative review.
-
-Provide your findings in the following JSON structure:
+Provide your findings in this exact JSON structure:
 {
   "classification": "AI-generated" | "Real" | "Edited" | "Mixed/Uncertain",
   "aiLikelihood": number (0-100),
@@ -203,6 +215,21 @@ Provide your findings in the following JSON structure:
             analysis = JSON.parse(response.text || "{}");
             if (!analysis.classification) {
               throw new Error("Missing classification in response");
+            }
+
+            // Post-processing: enforce uncertainty for low confidence
+            if (analysis.confidenceLevel === "Low" || 
+                (analysis.aiLikelihood < 60 && analysis.realLikelihood < 60)) {
+              analysis.classification = "Mixed/Uncertain";
+              analysis.finalVerdict = "Insufficient evidence to make a definitive classification. Further analysis recommended.";
+            }
+
+            // Normalize likelihoods to sum to ~100
+            const total = analysis.aiLikelihood + analysis.realLikelihood + analysis.editedLikelihood;
+            if (total > 0) {
+              analysis.aiLikelihood = Math.round((analysis.aiLikelihood / total) * 100);
+              analysis.realLikelihood = Math.round((analysis.realLikelihood / total) * 100);
+              analysis.editedLikelihood = Math.round((analysis.editedLikelihood / total) * 100);
             }
           } catch (parseError) {
             console.error("Gemini JSON parse failed:", response.text?.substring(0, 200));
