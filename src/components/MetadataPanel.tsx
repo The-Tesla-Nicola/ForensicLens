@@ -1,7 +1,41 @@
-import React from 'react';
-import { Camera, MapPin, Cpu, FileImage } from 'lucide-react';
+import { Camera, MapPin, Cpu, FileImage, type LucideIcon } from 'lucide-react';
 
-export default function MetadataPanel({ data }: { data: any }) {
+interface SoftwareTrace {
+  field: string;
+  value: string;
+  aiRelated: boolean;
+}
+
+interface GPSData {
+  lat: number;
+  lng: number;
+}
+
+interface Dimensions {
+  width: number;
+  height: number;
+}
+
+interface ExifData {
+  Model?: string;
+  Make?: string;
+  LensModel?: string;
+  FocalLength?: number;
+  FNumber?: number;
+  ISO?: number;
+  ExposureTime?: number;
+  DateTimeOriginal?: string;
+}
+
+interface MetadataPanelData {
+  exif?: ExifData | null;
+  hash?: string;
+  gps?: GPSData | null;
+  dimensions?: Dimensions | null;
+  softwareTraces?: SoftwareTrace[];
+}
+
+export default function MetadataPanel({ data }: { data: MetadataPanelData }) {
   if (!data?.exif && !data?.hash) {
     return (
       <div className="p-4 border border-[#F27D26]/20 rounded-xl bg-[#0A0A0A]">
@@ -26,7 +60,7 @@ export default function MetadataPanel({ data }: { data: any }) {
     );
   }
 
-  const sections: Array<{ title: string; icon: any; items: Array<{ label: string; value: string }> }> = [];
+  const sections: Array<{ title: string; icon: LucideIcon; items: Array<{ label: string; value: string }> }> = [];
 
   if (data.exif) {
     sections.push({
@@ -37,7 +71,7 @@ export default function MetadataPanel({ data }: { data: any }) {
         { label: 'Lens', value: data.exif.LensModel || 'Unknown' },
         { label: 'Focal Length', value: data.exif.FocalLength ? `${data.exif.FocalLength}mm` : 'Unknown' },
         { label: 'Aperture', value: data.exif.FNumber ? `f/${data.exif.FNumber}` : 'Unknown' },
-        { label: 'ISO', value: data.exif.ISO || 'Unknown' },
+        { label: 'ISO', value: data.exif.ISO != null ? String(data.exif.ISO) : 'Unknown' },
         { label: 'Shutter', value: data.exif.ExposureTime ? `${data.exif.ExposureTime}s` : 'Unknown' },
         { label: 'Date Taken', value: data.exif.DateTimeOriginal ? new Date(data.exif.DateTimeOriginal).toLocaleString() : 'Unknown' },
       ]

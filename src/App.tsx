@@ -89,6 +89,10 @@ export default function App() {
   const [extractStyle, setExtractStyle] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [caseHistory, setCaseHistory] = useState<{ id: string; timestamp: string; count: number }[]>(() => {
+    try { return JSON.parse(localStorage.getItem('ft_history') || '[]'); }
+    catch { return []; }
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,7 +184,8 @@ export default function App() {
       reader.readAsDataURL(entry.file);
     });
 
-    setBatchResults(prev => [...newItems, ...prev]);
+      setBatchResults(prev => [...newItems, ...prev]);
+      setCaseHistory(h => [{ id: crypto.randomUUID?.() || Math.random().toString(36), timestamp: new Date().toISOString(), count: newItems.length }, ...h].slice(0, 50));
   };
 
   useEffect(() => {
@@ -194,13 +199,41 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isAnalyzing]);
 
+  // Persist batch results to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('ft_batchResults', JSON.stringify(batchResults));
+    } catch { /* quota exceeded, silently ignore */ }
+  }, [batchResults]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ft_history', JSON.stringify(caseHistory));
+    } catch { /* ignore */ }
+  }, [caseHistory]);
+
+  // Restore batch results from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('ft_batchResults');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setBatchResults(parsed);
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   const runAnalysis = async () => {
     if (!selectedImage) return;
 
     setIsAnalyzing(true);
     setError(null);
     try {
-      const base64 = selectedImage.split(',')[1];
+        const parts = selectedImage.split(',');
+      if (parts.length < 2) throw new Error('Invalid image data format');
+      const base64 = parts[1];
       const mimeType = selectedImage.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
 
       const response = await fetch('/api/analyze', {
@@ -231,7 +264,9 @@ export default function App() {
       setBatchProgress({ current: idx + 1, total: pendingItems.length });
 
       try {
-        const base64 = item.thumbnail.split(',')[1];
+        const parts = item.thumbnail.split(',');
+        if (parts.length < 2) throw new Error('Invalid thumbnail data');
+        const base64 = parts[1];
         const mimeType = item.thumbnail.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
 
         const response = await fetch('/api/analyze', {
@@ -422,8 +457,11 @@ export default function App() {
 
     for (const item of batchResults) {
       if (item.thumbnail) {
-        const base64 = item.thumbnail.split(',')[1];
-        zip.file(`evidence/${item.filename}`, base64, { base64: true });
+        const parts = item.thumbnail.split(',');
+        const base64 = parts.length > 1 ? parts[1] : '';
+        if (!base64) continue;
+        const safeName = item.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+        zip.file(`evidence/${safeName}`, base64, { base64: true });
         zip.file(`reports/${item.filename}.json`, JSON.stringify({
           classification: item.classification,
           aiLikelihood: item.aiLikelihood,
@@ -478,8 +516,8 @@ export default function App() {
             <Fingerprint className="w-6 h-6 text-black" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tighter uppercase">RPE BY HARISH</h1>
-            <p className="text-[10px] uppercase tracking-[0.2em] opacity-50 font-mono">Digital Forensics Analyst v2.4.0</p>
+            <h1 className="text-xl font-bold tracking-tighter uppercase">ForensicTrace</h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] opacity-50 font-mono">Digital Image Forensics Tool v2.4.0</p>
           </div>
         </div>
         <div className="flex items-center gap-6">
@@ -803,6 +841,19 @@ export default function App() {
                       <Upload className="w-3 h-3" />
                       Append Evidence
                     </button>
+                    {batchResults.length > 0 && (
+                      <button 
+                        onClick={() => {
+                          setBatchResults([]);
+                          setCaseHistory([]);
+                          try { localStorage.removeItem('ft_batchResults'); localStorage.removeItem('ft_history'); } catch {}
+                        }}
+                        className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-500 font-bold text-[10px] uppercase tracking-widest rounded-lg flex items-center gap-2 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Clear All
+                      </button>
+                    )}
                   </div>
                 </div>
 

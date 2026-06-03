@@ -36,8 +36,17 @@ async function startServer() {
     message: "Too many requests. Please wait before analyzing more images.",
   });
 
+  // Simple API key guard for sensitive endpoints
+  const apiKeyGuard = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const token = req.headers['x-api-key'] as string | undefined;
+    if (process.env.NODE_ENV === 'production' && token !== process.env.GEMINI_API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+  };
+
   // API Routes
-  app.get("/api/download-source", (req, res) => {
+  app.get("/api/download-source", apiKeyGuard, (req, res) => {
     try {
       const zip = new AdmZip();
       const projectRoot = process.cwd();
@@ -68,7 +77,7 @@ async function startServer() {
 
       const zipBuffer = zip.toBuffer();
       res.set('Content-Type', 'application/zip');
-      res.set('Content-Disposition', 'attachment; filename=ForensicGuard_Source.zip');
+      res.set('Content-Disposition', 'attachment; filename=ForensicTrace_Source.zip');
       res.send(zipBuffer);
     } catch (error) {
       console.error("Source Download Error:", error);
@@ -77,7 +86,7 @@ async function startServer() {
   });
 
   const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-  const MAX_BASE64_LENGTH = 20 * 1024 * 1024;
+  const MAX_BASE64_LENGTH = 15 * 1024 * 1024;
 
   app.post("/api/analyze", analysisLimiter, async (req, res) => {
     try {
@@ -95,7 +104,11 @@ async function startServer() {
         return res.status(400).json({ error: "Image too large. Maximum 15MB." });
       }
 
-      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      if (imageBase64.length < 100) {
+        return res.status(400).json({ error: "Image data too small or empty." });
+      }
+
+      const base64Regex = /^[A-Za-z0-9+/\n]*={0,2}$/;
       if (!base64Regex.test(imageBase64)) {
         return res.status(400).json({ error: "Invalid base64 encoding" });
       }
