@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import exifr from 'exifr';
+
 import Papa from 'papaparse';
 import { 
   Upload, 
@@ -35,7 +35,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-
+import MetadataPanel from './components/MetadataPanel';
 
 // Extend jsPDF for autoTable (no longer needed, but removing cleanup)
 
@@ -117,12 +117,20 @@ export default function App() {
       setError(null);
       setViewMode('single');
       
-      // Extract EXIF
+      // Extract EXIF via server
       try {
-        const buffer = await fetch(base64).then(res => res.arrayBuffer());
-        const metadata = await exifr.parse(buffer);
-        setExifData(metadata);
+        const base64Data = base64.split(',')[1];
+        const metaResponse = await fetch('/api/metadata', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64Data }),
+        });
+        if (metaResponse.ok) {
+          const metaData = await metaResponse.json();
+          setExifData(metaData);
+        }
       } catch (err) {
+        console.warn("Server-side metadata extraction failed", err);
         setExifData(null);
       }
     };
@@ -600,6 +608,7 @@ export default function App() {
                             ))}
                           </ul>
                         </div>
+                        {exifData && <MetadataPanel data={exifData} />}
                       </motion.div>
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center text-center p-8 border border-[#141414] rounded-2xl bg-[#0A0A0A] min-h-[400px] opacity-30">

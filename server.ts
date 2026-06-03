@@ -7,6 +7,8 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import AdmZip from "adm-zip";
 import rateLimit from 'express-rate-limit';
+import exifr from 'exifr';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -263,6 +265,62 @@ Provide your findings in this exact JSON structure:
         return res.status(429).json({ error: "API rate limit exceeded. Please wait and try again." });
       }
       res.status(500).json({ error: error.message || "Failed to analyze image" });
+    }
+  });
+
+  // Metadata extraction endpoint
+  app.post("/api/metadata", async (req, res) => {
+    try {
+      const { imageBase64 } = req.body;
+      if (!imageBase64) return res.status(400).json({ error: "No image provided" });
+
+      const buffer = Buffer.from(imageBase64, 'base64');
+      const metadata = await exifr.parse(buffer, {
+        full: true,
+        multiSegment: true,
+        icc: true,
+        xmp: true,
+        tiff: true,
+        jfif: true,
+        ihdr: true,
+      } as any);
+
+      const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+
+      const AI_SOFTWARE_SIGNATURES = [
+        'midjourney', 'stable diffusion', 'dall-e', 'dalle', 'firefly',
+        'novelai', 'artbreeder', 'gan', 'generative', 'comfyui',
+        'automatic1111', 'fooocus', 'leonardo', 'dreamstudio'
+      ];
+
+      const softwareTraces: Array<{ field: string; value: string; aiRelated: boolean }> = [];
+      if (metadata?.Software) {
+        const sw = metadata.Software.toLowerCase();
+        if (AI_SOFTWARE_SIGNATURES.some(sig => sw.includes(sig))) {
+          softwareTraces.push({ field: 'Software', value: metadata.Software, aiRelated: true });
+        } else {
+          softwareTraces.push({ field: 'Software', value: metadata.Software, aiRelated: false });
+        }
+      }
+      if (metadata?.xmp?.CreatorTool) {
+        const ct = metadata.xmp.CreatorTool.toLowerCase();
+        if (AI_SOFTWARE_SIGNATURES.some(sig => ct.includes(sig))) {
+          softwareTraces.push({ field: 'XMP:CreatorTool', value: metadata.xmp.CreatorTool, aiRelated: true });
+        }
+      }
+
+      res.json({
+        exif: metadata,
+        hash,
+        softwareTraces,
+        hasExif: !!metadata,
+        dimensions: metadata?.width && metadata?.height ? { width: metadata.width, height: metadata.height } : null,
+        gps: metadata?.latitude && metadata?.longitude ? { lat: metadata.latitude, lng: metadata.longitude } : null,
+      });
+
+    } catch (err: any) {
+      console.error("Metadata extraction error:", err);
+      res.status(500).json({ error: err.message });
     }
   });
 
