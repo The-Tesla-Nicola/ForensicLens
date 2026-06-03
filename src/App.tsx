@@ -31,14 +31,14 @@ import {
   Trash2
 } from 'lucide-react';
 import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import MetadataPanel from './components/MetadataPanel';
 import VerdictCard from './components/VerdictCard';
 import EvidenceList from './components/EvidenceList';
 import { generateForensicReport } from './utils/pdfGenerator';
-
-// Extend jsPDF for autoTable (no longer needed, but removing cleanup)
+import { generateCaseId, REPORT_STYLES } from './utils/reportTemplates';
 
 interface AnalysisResult {
   classification: string;
@@ -61,6 +61,7 @@ interface BatchResult extends AnalysisResult {
   timestamp: string;
   thumbnail: string;
   status: 'pending' | 'analyzing' | 'completed' | 'error';
+  errorDetail?: string;
 }
 
 type SortField = 'filename' | 'classification' | 'aiLikelihood' | 'timestamp' | 'consistencyScore';
@@ -84,6 +85,7 @@ export default function App() {
   const [singleDeepScan, setSingleDeepScan] = useState(false);
   const [batchDeepScan, setBatchDeepScan] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -141,11 +143,16 @@ export default function App() {
   };
 
   const handleMultipleUploads = (files: File[]) => {
-    const newItems: BatchResult[] = files.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      filename: file.name,
+    const entries: { id: string; file: File }[] = files.map(file => ({
+      id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2, 9),
+      file,
+    }));
+
+    const newItems: BatchResult[] = entries.map(entry => ({
+      id: entry.id,
+      filename: entry.file.name,
       timestamp: new Date().toISOString(),
-      thumbnail: '', // Will be filled
+      thumbnail: '',
       status: 'pending',
       classification: 'Mixed/Uncertain',
       aiLikelihood: 0,
@@ -160,15 +167,14 @@ export default function App() {
       finalVerdict: ''
     }));
 
-    // Read thumbnails
-    files.forEach((file, index) => {
+    entries.forEach((entry) => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setBatchResults(prev => prev.map(item => 
-          item.filename === file.name ? { ...item, thumbnail: reader.result as string } : item
+        setBatchResults(prev => prev.map(item =>
+          item.id === entry.id ? { ...item, thumbnail: reader.result as string } : item
         ));
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(entry.file);
     });
 
     setBatchResults(prev => [...newItems, ...prev]);
@@ -214,9 +220,13 @@ export default function App() {
     const pendingItems = batchResults.filter(item => item.status === 'pending');
     if (pendingItems.length === 0) return;
 
-    for (const item of pendingItems) {
+    setBatchProgress({ current: 0, total: pendingItems.length });
+
+    for (let idx = 0; idx < pendingItems.length; idx++) {
+      const item = pendingItems[idx];
       setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'analyzing' } : i));
-      
+      setBatchProgress({ current: idx + 1, total: pendingItems.length });
+
       try {
         const base64 = item.thumbnail.split(',')[1];
         const mimeType = item.thumbnail.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
@@ -227,14 +237,23 @@ export default function App() {
           body: JSON.stringify({ imageBase64: base64, mimeType, deepScan: batchDeepScan }),
         });
 
-        if (!response.ok) throw new Error('Failed');
+        if (!response.ok) throw new Error(`Analysis failed (${response.status})`);
         const data = await response.json();
-        
+
         setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, ...data, status: 'completed', deepScan: batchDeepScan } : i));
-      } catch (err) {
-        setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error' } : i));
+      } catch (err: any) {
+        setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', errorDetail: err.message } : i));
       }
     }
+
+    setBatchProgress({ current: 0, total: 0 });
+  };
+
+  const retryFailed = () => {
+    setBatchResults(prev => prev.map(i =>
+      i.status === 'error' ? { ...i, status: 'pending', errorDetail: undefined } : i
+    ));
+    setTimeout(() => runBatchAnalysis(), 100);
   };
 
   const sortedAndFilteredBatch = useMemo(() => {
@@ -319,13 +338,117 @@ export default function App() {
     const csv = Papa.unparse(batchResults.map(r => ({
       Filename: r.filename,
       Classification: r.classification,
+      Confidence: r.confidenceLevel,
       AI_Likelihood: `${r.aiLikelihood}%`,
       Real_Likelihood: `${r.realLikelihood}%`,
-      Consistency: `${r.consistencyScore}%`,
-      Timestamp: r.timestamp
+      Edited_Likelihood: `${r.editedLikelihood}%`,
+      Consistency_Score: `${r.consistencyScore}%`,
+      Source: r.mostLikelySource,
+      Timestamp: new Date(r.timestamp).toLocaleString(),
+      Status: r.status,
     })));
-    const blob = new Blob([csv], { type: 'text/csv' });
-    saveAs(blob, `Forensic_Batch_Results_${Date.now()}.csv`);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    saveAs(blob, `ForensicTrace_Batch_${Date.now()}.csv`);
+  };
+
+  const exportBatchPDF = () => {
+    const doc = new jsPDF();
+    const caseId = generateCaseId();
+
+    doc.setFillColor(...REPORT_STYLES.darkBg);
+    doc.rect(0, 0, 210, 50, 'F');
+    doc.setTextColor(...REPORT_STYLES.primaryColor);
+    doc.setFontSize(24);
+    doc.text('FORENSICTRACE', 15, 25);
+    doc.setFontSize(10);
+    doc.setTextColor(...REPORT_STYLES.textColor);
+    doc.text(`Batch Analysis Report — ${batchResults.length} images`, 15, 35);
+    doc.text(`Case: ${caseId}`, 15, 42);
+
+    const completedItems = batchResults.filter(r => r.status === 'completed');
+    const aiCount = completedItems.filter(r => r.classification === 'AI-generated').length;
+    const realCount = completedItems.filter(r => r.classification === 'Real').length;
+    const uncertainCount = completedItems.filter(r => r.classification === 'Mixed/Uncertain').length;
+
+    autoTable(doc, {
+      startY: 60,
+      body: [
+        ['AI-Generated', `${aiCount} (${completedItems.length > 0 ? Math.round(aiCount / completedItems.length * 100) : 0}%)`],
+        ['Real', `${realCount} (${completedItems.length > 0 ? Math.round(realCount / completedItems.length * 100) : 0}%)`],
+        ['Uncertain', `${uncertainCount} (${completedItems.length > 0 ? Math.round(uncertainCount / completedItems.length * 100) : 0}%)`],
+        ['Total', `${batchResults.length}`],
+      ],
+      theme: 'grid',
+      margin: { left: 15, right: 15 },
+    });
+
+    doc.addPage();
+    const tableData = batchResults.map(r => [
+      r.filename,
+      r.classification,
+      `${r.aiLikelihood}%`,
+      r.confidenceLevel,
+      r.status,
+    ]);
+
+    autoTable(doc, {
+      startY: 15,
+      head: [['Filename', 'Classification', 'AI%', 'Confidence', 'Status']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: REPORT_STYLES.lightBg, textColor: REPORT_STYLES.primaryColor },
+      margin: { left: 15, right: 15 },
+    });
+
+    doc.save(`ForensicTrace_Batch_${caseId}.pdf`);
+  };
+
+  const exportBatchArchive = async () => {
+    const zip = new JSZip();
+    const caseId = generateCaseId();
+
+    const csv = Papa.unparse(batchResults.map(r => ({
+      Filename: r.filename,
+      Classification: r.classification,
+      Confidence: r.confidenceLevel,
+      AI_Likelihood: `${r.aiLikelihood}%`,
+      Real_Likelihood: `${r.realLikelihood}%`,
+      Edited_Likelihood: `${r.editedLikelihood}%`,
+    })));
+    zip.file('batch_results.csv', csv);
+
+    for (const item of batchResults) {
+      if (item.thumbnail) {
+        const base64 = item.thumbnail.split(',')[1];
+        zip.file(`evidence/${item.filename}`, base64, { base64: true });
+        zip.file(`reports/${item.filename}.json`, JSON.stringify({
+          classification: item.classification,
+          aiLikelihood: item.aiLikelihood,
+          realLikelihood: item.realLikelihood,
+          editedLikelihood: item.editedLikelihood,
+          consistencyScore: item.consistencyScore,
+          confidenceLevel: item.confidenceLevel,
+          evidence: item.keyEvidence,
+          issues: item.detectedIssues,
+          source: item.mostLikelySource,
+          deepScan: item.deepScan,
+        }, null, 2));
+      }
+    }
+
+    const completed = batchResults.filter(r => r.status === 'completed');
+    zip.file('case_summary.json', JSON.stringify({
+      caseId,
+      date: new Date().toISOString(),
+      totalImages: batchResults.length,
+      completedCount: completed.length,
+      aiCount: completed.filter(r => r.classification === 'AI-generated').length,
+      realCount: completed.filter(r => r.classification === 'Real').length,
+      uncertainCount: completed.filter(r => r.classification === 'Mixed/Uncertain').length,
+    }, null, 2));
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    saveAs(content, `ForensicTrace_Archive_${caseId}.zip`);
   };
 
   const reset = () => {
@@ -620,6 +743,20 @@ export default function App() {
                       Export CSV
                     </button>
                     <button 
+                      onClick={exportBatchPDF}
+                      className="px-4 py-2 bg-[#141414] border border-white/10 text-white font-bold text-[10px] uppercase tracking-widest rounded-lg flex items-center gap-2 hover:bg-white/5"
+                    >
+                      <FileText className="w-3 h-3" />
+                      Export PDF
+                    </button>
+                    <button 
+                      onClick={exportBatchArchive}
+                      className="px-4 py-2 bg-[#141414] border border-white/10 text-white font-bold text-[10px] uppercase tracking-widest rounded-lg flex items-center gap-2 hover:bg-white/5"
+                    >
+                      <Download className="w-3 h-3" />
+                      Export ZIP
+                    </button>
+                    <button 
                       onClick={() => fileInputRef.current?.click()}
                       className="px-4 py-2 bg-[#141414] border border-[#F27D26]/20 text-white font-bold text-[10px] uppercase tracking-widest rounded-lg flex items-center gap-2"
                     >
@@ -627,6 +764,35 @@ export default function App() {
                       Append Evidence
                     </button>
                   </div>
+                </div>
+
+                {/* Batch Progress */}
+                {batchProgress.total > 0 && (
+                  <div className="p-4 bg-[#0A0A0A] border border-[#141414] rounded-xl">
+                    <div className="flex justify-between text-[10px] font-mono text-[#F27D26] mb-2">
+                      <span>Processing batch... {batchProgress.current}/{batchProgress.total}</span>
+                      <span>{Math.round((batchProgress.current / batchProgress.total) * 100)}%</span>
+                    </div>
+                    <div className="h-1.5 bg-[#141414] rounded-full overflow-hidden">
+                      <motion.div
+                        className="h-full bg-[#F27D26]"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  {batchResults.some(item => item.status === 'error') && (
+                    <button
+                      onClick={retryFailed}
+                      className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 font-bold text-[10px] uppercase tracking-widest rounded-lg flex items-center gap-2 hover:bg-red-500/20"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Retry Failed
+                    </button>
+                  )}
                 </div>
 
                 {/* Batch Table */}
@@ -670,7 +836,27 @@ export default function App() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           key={item.id} 
-                          className="group hover:bg-white/[0.02] transition-colors"
+                          className="group hover:bg-white/[0.02] transition-colors cursor-pointer"
+                          onClick={() => {
+                            setSelectedImage(item.thumbnail);
+                            if (item.status === 'completed') {
+                              setResult({
+                                classification: item.classification,
+                                aiLikelihood: item.aiLikelihood,
+                                realLikelihood: item.realLikelihood,
+                                editedLikelihood: item.editedLikelihood,
+                                consistencyScore: item.consistencyScore,
+                                confidenceLevel: item.confidenceLevel,
+                                keyEvidence: item.keyEvidence,
+                                detectedIssues: item.detectedIssues,
+                                mostLikelySource: item.mostLikelySource,
+                                forensicSummary: item.forensicSummary,
+                                finalVerdict: item.finalVerdict,
+                                deepScan: item.deepScan,
+                              });
+                            }
+                            setViewMode('single');
+                          }}
                         >
                           <td className="p-4">
                             <div 
