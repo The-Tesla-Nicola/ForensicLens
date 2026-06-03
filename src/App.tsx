@@ -40,7 +40,7 @@ import { generateForensicReport } from './utils/pdfGenerator';
 // Extend jsPDF for autoTable (no longer needed, but removing cleanup)
 
 interface AnalysisResult {
-  classification: 'AI-generated' | 'Real' | 'Edited' | 'Mixed/Uncertain';
+  classification: string;
   aiLikelihood: number;
   realLikelihood: number;
   editedLikelihood: number;
@@ -51,6 +51,7 @@ interface AnalysisResult {
   mostLikelySource: string;
   forensicSummary: string;
   finalVerdict: string;
+  deepScan?: boolean;
 }
 
 interface BatchResult extends AnalysisResult {
@@ -79,7 +80,8 @@ export default function App() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [filterClassification, setFilterClassification] = useState<string>('all');
   
-  const [deepScan, setDeepScan] = useState(false);
+  const [singleDeepScan, setSingleDeepScan] = useState(false);
+  const [batchDeepScan, setBatchDeepScan] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -194,12 +196,12 @@ export default function App() {
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, mimeType, deepScan }),
+        body: JSON.stringify({ imageBase64: base64, mimeType, deepScan: singleDeepScan }),
       });
 
       if (!response.ok) throw new Error('Analysis failed.');
       const data = await response.json();
-      setResult(data);
+      setResult({ ...data, deepScan: singleDeepScan });
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -221,13 +223,13 @@ export default function App() {
         const response = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64, mimeType, deepScan }),
+          body: JSON.stringify({ imageBase64: base64, mimeType, deepScan: batchDeepScan }),
         });
 
         if (!response.ok) throw new Error('Failed');
         const data = await response.json();
         
-        setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, ...data, status: 'completed' } : i));
+        setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, ...data, status: 'completed', deepScan: batchDeepScan } : i));
       } catch (err) {
         setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error' } : i));
       }
@@ -494,7 +496,7 @@ export default function App() {
                   {!result && !isAnalyzing && !error && (
                     <div className="flex flex-col gap-4">
                       <label className="flex items-center gap-2 cursor-pointer bg-[#0A0A0A] p-3 rounded-xl border border-[#141414] hover:border-[#F27D26] transition-all">
-                        <input type="checkbox" checked={deepScan} onChange={(e) => setDeepScan(e.target.checked)} className="accent-[#F27D26]" />
+                        <input type="checkbox" checked={singleDeepScan} onChange={(e) => setSingleDeepScan(e.target.checked)} className="accent-[#F27D26]" />
                         <span className="text-xs uppercase font-bold tracking-widest text-white/70">Enable Deep Scan <span className="text-[9px] opacity-50">(Noise Analysis & Edge Gradient)</span></span>
                       </label>
                       <button
@@ -548,7 +550,12 @@ export default function App() {
                         <div className={`p-6 rounded-2xl border ${result.classification === 'AI-generated' ? 'border-orange-500/30 bg-orange-500/5' : result.classification === 'Real' ? 'border-green-500/30 bg-green-500/5' : 'border-white/10 bg-white/5'}`}>
                           <div className="flex justify-between items-start mb-4">
                             <div>
-                              <p className="text-[10px] uppercase font-mono opacity-50 tracking-widest mb-1">Final Classification</p>
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-[10px] uppercase font-mono opacity-50 tracking-widest">Final Classification</p>
+                                {result.deepScan && (
+                                  <span className="px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest bg-[#F27D26]/20 text-[#F27D26] border border-[#F27D26]/30 rounded">DEEP SCAN</span>
+                                )}
+                              </div>
                               <h3 className={`text-4xl font-black uppercase italic tracking-tighter ${result.classification === 'AI-generated' ? 'text-[#F27D26]' : result.classification === 'Real' ? 'text-green-500' : 'text-white'}`}>
                                 {result.classification}
                               </h3>
@@ -618,7 +625,7 @@ export default function App() {
                     </div>
                     
                     <label className="flex items-center gap-2 cursor-pointer bg-[#0A0A0A] p-2 px-3 rounded-lg border border-[#141414] hover:border-[#F27D26] transition-all">
-                      <input type="checkbox" checked={deepScan} onChange={(e) => setDeepScan(e.target.checked)} className="accent-[#F27D26]" />
+                      <input type="checkbox" checked={batchDeepScan} onChange={(e) => setBatchDeepScan(e.target.checked)} className="accent-[#F27D26]" />
                       <span className="text-[10px] uppercase font-bold tracking-widest">Enable Deep Scan</span>
                     </label>
                     <button 
@@ -708,12 +715,17 @@ export default function App() {
                           </td>
                           <td className="p-4">
                             {item.status === 'completed' ? (
+                              <>
                               <span className={`text-[10px] font-bold uppercase italic px-2 py-1 rounded ${
                                 item.classification === 'AI-generated' ? 'text-[#F27D26] bg-[#F27D26]/10' : 
                                 item.classification === 'Real' ? 'text-green-500 bg-green-500/10' : 'text-white/50 bg-white/5'
                               }`}>
                                 {item.classification}
                               </span>
+                              {item.deepScan && (
+                                <span className="ml-1.5 px-1 py-0.5 text-[7px] font-mono uppercase tracking-widest bg-[#F27D26]/20 text-[#F27D26] border border-[#F27D26]/30 rounded">DS</span>
+                              )}
+                              </>
                             ) : (
                               <span className="text-[10px] uppercase opacity-30">Analysis Pending</span>
                             )}

@@ -161,7 +161,37 @@ Provide your findings in this exact JSON structure:
 }`;
 
       if (deepScan) {
-        prompt += `\n\n[DENSE-SCAN ENABLED] Perform the highest-precision forensic analysis. Pay obsessive attention to PRNU signatures, anomalous edge-gradient discontinuities, generative pattern signatures, and possible latent noise pattern artifacts commonly found in AI-models. Be more critical and strictly analytical.`;
+        prompt = `You are a DEEP FORENSIC SCANNER. This is a HIGH-PRECISION analysis mode.
+
+REQUIRED IN THIS MODE:
+- Perform 3 independent analysis passes through your reasoning
+- For each pass, write down what you see
+- Compare the 3 passes and note any contradictions
+- Only classify if at least 2 of 3 passes agree
+- If they disagree, classify as "Mixed/Uncertain"
+
+ADDITIONAL CHECKS:
+1. PRNU/Sensor Noise: Check if noise pattern is consistent with camera sensor
+2. Edge Gradient Analysis: Check if edges transition naturally or have sharp AI boundaries
+3. Frequency Analysis: Describe frequency domain patterns (uniform grids suggest AI)
+4. Color Matrix: Check if color filter array pattern is consistent
+
+${FEW_SHOT_EXAMPLES}
+
+Provide your findings in this exact JSON structure:
+{
+  "classification": "AI-generated" | "Real" | "Edited" | "Mixed/Uncertain",
+  "aiLikelihood": number (0-100),
+  "realLikelihood": number (0-100),
+  "editedLikelihood": number (0-100),
+  "consistencyScore": number (0-100),
+  "confidenceLevel": "Low" | "Medium" | "High",
+  "keyEvidence": string[],
+  "detectedIssues": string[],
+  "mostLikelySource": string,
+  "forensicSummary": string,
+  "finalVerdict": string
+}`;
       }
 
       const MAX_RETRIES = 1;
