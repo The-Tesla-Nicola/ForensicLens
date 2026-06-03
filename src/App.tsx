@@ -69,6 +69,38 @@ interface BatchResult extends AnalysisResult {
 type SortField = 'filename' | 'classification' | 'aiLikelihood' | 'timestamp' | 'consistencyScore';
 type SortOrder = 'asc' | 'desc';
 
+const MAX_DIM = 1920;
+
+function resizeImage(file: File, maxDim = MAX_DIM): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width <= maxDim && height <= maxDim) {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+        return;
+      }
+      const ratio = Math.min(maxDim / width, maxDim / height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Canvas not supported')); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL(file.type || 'image/jpeg', 0.9));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
+    img.src = url;
+  });
+}
+
 export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -89,6 +121,7 @@ export default function App() {
   const [extractStyle, setExtractStyle] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const abortRef = useRef<AbortController | null>(null);
   const [caseHistory, setCaseHistory] = useState<{ id: string; timestamp: string; count: number }[]>(() => {
     try { return JSON.parse(localStorage.getItem('ft_history') || '[]'); }
     catch { return []; }
@@ -121,32 +154,22 @@ export default function App() {
     }
 
     const file = files[0];
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64 = reader.result as string;
+    resizeImage(file).then(base64 => {
       setSelectedImage(base64);
       setResult(null);
       setError(null);
       setViewMode('single');
       
       // Extract EXIF via server
-      try {
-        const base64Data = base64.split(',')[1];
-        const metaResponse = await fetch('/api/metadata', {
+      const base64Data = base64.split(',')[1];
+      if (base64Data) {
+        fetch('/api/metadata', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64Data }),
-        });
-        if (metaResponse.ok) {
-          const metaData = await metaResponse.json();
-          setExifData(metaData);
-        }
-      } catch (err) {
-        console.warn("Server-side metadata extraction failed", err);
-        setExifData(null);
+        }).then(r => r.ok && r.json()).then(md => setExifData(md)).catch(() => setExifData(null));
       }
-    };
-    reader.readAsDataURL(file);
+    }).catch(err => setError(err.message));
   };
 
   const handleMultipleUploads = (files: File[]) => {
@@ -175,17 +198,15 @@ export default function App() {
     }));
 
     entries.forEach((entry) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
+      resizeImage(entry.file).then(dataUrl => {
         setBatchResults(prev => prev.map(item =>
-          item.id === entry.id ? { ...item, thumbnail: reader.result as string } : item
+          item.id === entry.id ? { ...item, thumbnail: dataUrl } : item
         ));
-      };
-      reader.readAsDataURL(entry.file);
+      });
     });
 
-      setBatchResults(prev => [...newItems, ...prev]);
-      setCaseHistory(h => [{ id: crypto.randomUUID?.() || Math.random().toString(36), timestamp: new Date().toISOString(), count: newItems.length }, ...h].slice(0, 50));
+    setBatchResults(prev => [...newItems, ...prev]);
+    setCaseHistory(h => [{ id: crypto.randomUUID?.() || Math.random().toString(36), timestamp: new Date().toISOString(), count: newItems.length }, ...h].slice(0, 50));
   };
 
   useEffect(() => {
@@ -228,6 +249,10 @@ export default function App() {
   const runAnalysis = async () => {
     if (!selectedImage) return;
 
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+    const { signal } = abortRef.current;
+
     setIsAnalyzing(true);
     setError(null);
     try {
@@ -240,15 +265,49 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64, mimeType, deepScan: singleDeepScan, extractStyle }),
+        signal,
       });
 
       if (!response.ok) throw new Error('Analysis failed.');
       const data = await response.json();
+      if (signal.aborted) return;
       setResult({ ...data, deepScan: singleDeepScan });
     } catch (err: any) {
+      if (err.name === 'AbortError') return;
       setError(err.message);
     } finally {
       setIsAnalyzing(false);
+      setElapsedSeconds(0);
+    }
+  };
+
+  const cancelAnalysis = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsAnalyzing(false);
+    setElapsedSeconds(0);
+  };
+
+  const processOneBatchItem = async (item: BatchResult) => {
+    setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'analyzing' } : i));
+    try {
+      const parts = item.thumbnail.split(',');
+      if (parts.length < 2) throw new Error('Invalid thumbnail data');
+      const base64 = parts[1];
+      const mimeType = item.thumbnail.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType, deepScan: batchDeepScan }),
+      });
+
+      if (!response.ok) throw new Error(`Analysis failed (${response.status})`);
+      const data = await response.json();
+
+      setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, ...data, status: 'completed', deepScan: batchDeepScan } : i));
+    } catch (err: any) {
+      setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', errorDetail: err.message } : i));
     }
   };
 
@@ -257,31 +316,14 @@ export default function App() {
     if (pendingItems.length === 0) return;
 
     setBatchProgress({ current: 0, total: pendingItems.length });
+    const CONCURRENCY = 2;
+    let completed = 0;
 
-    for (let idx = 0; idx < pendingItems.length; idx++) {
-      const item = pendingItems[idx];
-      setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'analyzing' } : i));
-      setBatchProgress({ current: idx + 1, total: pendingItems.length });
-
-      try {
-        const parts = item.thumbnail.split(',');
-        if (parts.length < 2) throw new Error('Invalid thumbnail data');
-        const base64 = parts[1];
-        const mimeType = item.thumbnail.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-
-        const response = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64, mimeType, deepScan: batchDeepScan }),
-        });
-
-        if (!response.ok) throw new Error(`Analysis failed (${response.status})`);
-        const data = await response.json();
-
-        setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, ...data, status: 'completed', deepScan: batchDeepScan } : i));
-      } catch (err: any) {
-        setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', errorDetail: err.message } : i));
-      }
+    for (let i = 0; i < pendingItems.length; i += CONCURRENCY) {
+      const chunk = pendingItems.slice(i, i + CONCURRENCY);
+      await Promise.allSettled(chunk.map(item => processOneBatchItem(item)));
+      completed += chunk.length;
+      setBatchProgress({ current: completed, total: pendingItems.length });
     }
 
     setBatchProgress({ current: 0, total: 0 });
@@ -697,6 +739,12 @@ export default function App() {
                       <div className="h-1 bg-[#141414] rounded-full overflow-hidden">
                         <motion.div className="h-full bg-[#F27D26]" initial={{ width: 0 }} animate={{ width: '100%' }} transition={{ duration: 3 }} />
                       </div>
+                      <button
+                        onClick={cancelAnalysis}
+                        className="w-full py-2 bg-red-500/10 border border-red-500/30 text-red-500 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-red-500/20 transition-all flex items-center justify-center gap-2"
+                      >
+                        Cancel Analysis
+                      </button>
                     </div>
                   )}
 
