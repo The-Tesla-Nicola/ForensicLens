@@ -53,6 +53,8 @@ interface AnalysisResult {
   forensicSummary: string;
   finalVerdict: string;
   deepScan?: boolean;
+  elaScore?: number | null;
+  elaInterpretation?: string | null;
 }
 
 interface BatchResult extends AnalysisResult {
@@ -685,6 +687,22 @@ export default function App() {
                           detectedIssues={result.detectedIssues}
                           forensicSummary={result.forensicSummary}
                         />
+                        {result.elaScore !== null && result.elaScore !== undefined && (
+                          <div className="p-4 border border-[#141414] rounded-xl bg-[#0A0A0A]">
+                            <p className="text-[9px] uppercase font-mono text-[#F27D26] mb-2">Error Level Analysis</p>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs opacity-70">Score: {result.elaScore}</span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded ${
+                                result.elaInterpretation === 'uniform' ? 'bg-green-500/10 text-green-500' :
+                                result.elaInterpretation === 'suspicious' ? 'bg-yellow-500/10 text-yellow-500' :
+                                'bg-red-500/10 text-red-500'
+                              }`}>
+                                {result.elaInterpretation}
+                              </span>
+                            </div>
+                            <p className="text-[9px] mt-2 opacity-30">Higher scores suggest image splicing or editing</p>
+                          </div>
+                        )}
                         {exifData && <MetadataPanel data={exifData} />}
                       </motion.div>
                     ) : (

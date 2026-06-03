@@ -9,6 +9,7 @@ import AdmZip from "adm-zip";
 import rateLimit from 'express-rate-limit';
 import exifr from 'exifr';
 import crypto from 'crypto';
+import { performELA } from './src/services/forensics';
 
 dotenv.config();
 
@@ -194,6 +195,16 @@ Provide your findings in this exact JSON structure:
 }`;
       }
 
+      // Run ELA before Gemini
+      let elaResult: { score: number | null; interpretation: string | null } = { score: null, interpretation: null };
+      try {
+        const buffer = Buffer.from(imageBase64, 'base64');
+        const ela = await performELA(buffer, resolvedMimeType);
+        elaResult = { score: ela.score, interpretation: ela.interpretation };
+      } catch (elaErr) {
+        console.warn("ELA analysis failed (non-critical):", elaErr);
+      }
+
       const MAX_RETRIES = 1;
       let lastError: any;
       let analysis: any;
@@ -284,7 +295,11 @@ Provide your findings in this exact JSON structure:
         }
       }
 
-      res.json(analysis);
+      res.json({
+        ...analysis,
+        elaScore: elaResult.score,
+        elaInterpretation: elaResult.interpretation,
+      });
 
     } catch (error: any) {
       console.error("Analysis Error:", error);
