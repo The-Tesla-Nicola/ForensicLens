@@ -17,6 +17,26 @@ const NV_BASE_URL = process.env.NV_BASE_URL || "https://integrate.api.nvidia.com
 const NV_MODEL = process.env.NV_MODEL || "meta/llama-3.2-90b-vision-instruct";
 const HF_API_KEY = process.env.hugging_face_api || "";
 
+// --- Fetch with retry (handles transient ConnectTimeoutError) ---
+async function fetchWithRetry(url: string, opts: any, retries = 2, delayMs = 3000): Promise<Response> {
+  let lastErr: any;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fetch(url, opts);
+    } catch (err: any) {
+      lastErr = err;
+      const isTimeout = err?.cause?.code === 'UND_ERR_CONNECT_TIMEOUT' || err?.name === 'AbortError' || err?.code === 'ETIMEDOUT';
+      if (isTimeout && i < retries) {
+        console.log(`  Retry ${i + 1}/${retries} after timeout...`);
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 // --- HuggingFace AI Detector (Aya Vision 32B, 2-pass majority vote) ---
 async function detectAIImage(base64: string, mimeType: string): Promise<{ label: string; confidence: number; raw: string }> {
   if (!HF_API_KEY) return { label: 'unknown', confidence: 0, raw: '' };
@@ -69,7 +89,7 @@ Respond with ONLY this JSON:
           temperature: 0.1 + (pass * 0.2)
         });
 
-        const resp = await fetch('https://router.huggingface.co/v1/chat/completions', {
+        const resp = await fetchWithRetry('https://router.huggingface.co/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${HF_API_KEY}`, 'Content-Type': 'application/json' },
           body,
@@ -117,7 +137,7 @@ async function runAnalysisPass(prompt: string, systemMsg: string, dataUri: strin
     }
   } catch { /* use original */ }
 
-  const resp = await fetch(`${NV_BASE_URL}/chat/completions`, {
+  const resp = await fetchWithRetry(`${NV_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${NV_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -532,7 +552,7 @@ DEEP SCAN CONSTRAINTS:
       if (finalAnalysis.classification === 'AI-generated' || finalAnalysis.classification === 'Edited') {
         try {
           const revDataUri = await resizeImage(dataUri);
-          const revResponse = await fetch(`${NV_BASE_URL}/chat/completions`, {
+          const revResponse = await fetchWithRetry(`${NV_BASE_URL}/chat/completions`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${NV_API_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -626,7 +646,7 @@ DEEP SCAN CONSTRAINTS:
 
       const dataUri = await resizeImage(`data:${mimeType || "image/jpeg"};base64,${imageBase64}`);
 
-      const resp = await fetch(`${NV_BASE_URL}/chat/completions`, {
+      const resp = await fetchWithRetry(`${NV_BASE_URL}/chat/completions`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${NV_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
