@@ -15,7 +15,7 @@ function ScoreBar({ label, value, color, barColor }: { label: string; value: num
   return (
     <div className="text-center">
       <p className={`text-[10px] font-bold uppercase tracking-wider ${color}`}>{label}</p>
-      <p className={`text-2xl font-mono font-bold mt-1 ${color}`}>{value}%</p>
+      <p className={`text-2xl font-mono font-bold mt-1 ${color}`}>{value ?? 0}%</p>
       <div className="mt-1 h-1 bg-white/5 rounded-full overflow-hidden">
         <div className={`h-full ${barColor} rounded-full transition-all duration-1000`} style={{ width: `${value}%` }} />
       </div>
@@ -71,7 +71,7 @@ export default function VerdictCard({ classification, aiLikelihood, realLikeliho
       <div className="mt-4 pt-4 border-t border-white/5">
         <div className="flex justify-between text-xs opacity-50">
           <span>Consistency Score</span>
-          <span className="font-mono font-bold">{consistencyScore}%</span>
+          <span className="font-mono font-bold">{consistencyScore ?? 0}%</span>
         </div>
         <div className="mt-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
           <div

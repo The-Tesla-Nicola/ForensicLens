@@ -55,6 +55,10 @@ interface AnalysisResult {
   deepScan?: boolean;
   elaScore?: number | null;
   elaInterpretation?: string | null;
+  reversePrompt?: string | null;
+  reversePromptStyle?: string | null;
+  reversePromptConfidence?: string | null;
+  hfDetection?: { label: string; confidence: number } | null;
 }
 
 interface BatchResult extends AnalysisResult {
@@ -108,6 +112,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exifData, setExifData] = useState<any>(null);
+  const [reversePromptResult, setReversePromptResult] = useState<any>(null);
+  const [isReversePromptLoading, setIsReversePromptLoading] = useState(false);
   
   // Batch State
   const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
@@ -288,6 +294,32 @@ export default function App() {
     setElapsedSeconds(0);
   };
 
+  const generateReversePrompt = async () => {
+    if (!selectedImage) return;
+    setIsReversePromptLoading(true);
+    setReversePromptResult(null);
+    try {
+      const parts = selectedImage.split(',');
+      if (parts.length < 2) throw new Error('Invalid image data');
+      const base64 = parts[1];
+      const mimeType = selectedImage.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+
+      const response = await fetch('/api/reverse-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType }),
+      });
+
+      if (!response.ok) throw new Error(`Reverse prompt failed (${response.status})`);
+      const data = await response.json();
+      setReversePromptResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsReversePromptLoading(false);
+    }
+  };
+
   const processOneBatchItem = async (item: BatchResult) => {
     setBatchResults(prev => prev.map(i => i.id === item.id ? { ...i, status: 'analyzing' } : i));
     try {
@@ -381,6 +413,9 @@ export default function App() {
       mostLikelySource: data.mostLikelySource,
       filename: (data as any).filename || 'evidence',
       hash: exifData?.hash,
+      reversePrompt: data.reversePrompt || (item as any)?.reversePrompt || null,
+      reversePromptStyle: data.reversePromptStyle || (item as any)?.reversePromptStyle || null,
+      hfDetection: data.hfDetection || (item as any)?.hfDetection || null,
     }, img);
 
     doc.save(`ForensicTrace_Report_${Date.now()}.pdf`);
@@ -612,8 +647,26 @@ export default function App() {
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                const files = e.dataTransfer.files;
-                if (files.length > 0) handleMultipleUploads(Array.from(files));
+                const files = Array.from(e.dataTransfer.files);
+                if (files.length === 0) return;
+                const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+                const MAX_SIZE = 15 * 1024 * 1024;
+                const validFiles: File[] = [];
+                for (const file of files) {
+                  if (!ALLOWED_TYPES.includes(file.type)) {
+                    setError(`Unsupported file type: ${file.type}. Use JPEG, PNG, or WebP.`);
+                    return;
+                  }
+                  if (file.size > MAX_SIZE) {
+                    setError(`File too large: ${file.name}. Maximum 15MB.`);
+                    return;
+                  }
+                  validFiles.push(file);
+                }
+                if (validFiles.length > 0) {
+                  handleMultipleUploads(validFiles);
+                  setViewMode('batch');
+                }
               }}
               className="group relative border-2 border-dashed border-[#141414] hover:border-[#F27D26] rounded-2xl p-12 text-center transition-all cursor-pointer bg-[#0A0A0A]"
             >
@@ -758,6 +811,19 @@ export default function App() {
                       </button>
                     </div>
                   )}
+
+                  {result && result.classification === 'AI-generated' && (
+                    <div className="mt-4">
+                      <button 
+                        onClick={generateReversePrompt} 
+                        disabled={isReversePromptLoading}
+                        className="w-full py-3 bg-[#141414] border border-[#F27D26]/30 text-[#F27D26] font-bold uppercase tracking-widest text-xs rounded-xl hover:bg-[#1f1f1f] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        <Search className={`w-4 h-4 ${isReversePromptLoading ? 'animate-spin' : ''}`} /> 
+                        {isReversePromptLoading ? 'Generating Reverse Prompt...' : 'Reverse Engineer Prompt'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="lg:col-span-5">
@@ -811,6 +877,41 @@ export default function App() {
                             )}
                           </div>
                         )}
+                        {reversePromptResult && (
+                          <div className="p-4 border border-[#F27D26]/20 rounded-xl bg-[#0A0A0A]">
+                            <div className="flex items-center gap-2 text-[10px] font-mono text-[#F27D26] uppercase tracking-widest mb-3">
+                              <Search className="w-4 h-4" />
+                              Reverse Engineered Prompt
+                            </div>
+                            <div className="space-y-2">
+                              <div className="p-3 bg-black/40 rounded-lg border border-[#141414]">
+                                <p className="text-[9px] opacity-40 uppercase mb-1">Generated Prompt</p>
+                                <p className="text-xs font-mono leading-relaxed">{reversePromptResult.prompt}</p>
+                              </div>
+                              {reversePromptResult.style && (
+                                <div className="flex gap-4">
+                                  <div>
+                                    <p className="text-[9px] opacity-40 uppercase">Style</p>
+                                    <p className="text-xs font-mono">{reversePromptResult.style}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] opacity-40 uppercase">Confidence</p>
+                                    <p className="text-xs font-mono">{reversePromptResult.confidence}</p>
+                                  </div>
+                                </div>
+                              )}
+                              {reversePromptResult.notes && (
+                                <p className="text-[9px] opacity-30 mt-1">{reversePromptResult.notes}</p>
+                              )}
+                              <button 
+                                onClick={() => navigator.clipboard.writeText(reversePromptResult.prompt)}
+                                className="mt-2 text-[9px] font-mono text-[#F27D26] uppercase tracking-widest hover:underline"
+                              >
+                                Copy Prompt to Clipboard
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         {exifData && <MetadataPanel data={exifData} />}
                       </motion.div>
                     ) : (
@@ -844,7 +945,8 @@ export default function App() {
                         <option value="all">Filter: All</option>
                         <option value="AI-generated">AI-Generated</option>
                         <option value="Real">Real Capture</option>
-                        <option value="Uncertain">Uncertain</option>
+                        <option value="Edited">Edited</option>
+                        <option value="Mixed/Uncertain">Uncertain</option>
                       </select>
                     </div>
                     
@@ -1092,7 +1194,7 @@ export default function App() {
       </main>
 
       <footer className="mt-20 border-t border-[#141414] p-8 text-center text-[10px] opacity-30 font-mono uppercase tracking-[0.4em]">
-        Signal Processed via Gemini Neural Core • 2026 Virtual Forensics Div.
+        Signal Processed via NVIDIA Nemotron Neural Core • 2026 Virtual Forensics Div.
       </footer>
     </div>
   );

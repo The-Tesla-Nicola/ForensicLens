@@ -95,7 +95,7 @@ export default function MetadataPanel({ data }: { data: MetadataPanelData }) {
       icon: FileImage,
       items: [
         { label: 'Dimensions', value: `${data.dimensions.width}\u00D7${data.dimensions.height}` },
-        { label: 'SHA-256', value: data.hash?.substring(0, 16) + '...' },
+        { label: 'SHA-256', value: data.hash ? data.hash.substring(0, 16) + '...' : 'Unknown' },
       ]
     });
   }

@@ -16,6 +16,9 @@ export interface PDFData {
   mostLikelySource: string;
   filename?: string;
   hash?: string;
+  reversePrompt?: string | null;
+  reversePromptStyle?: string | null;
+  hfDetection?: { label: string; confidence: number } | null;
 }
 
 export function generateForensicReport(data: PDFData, imageBase64?: string): jsPDF {
@@ -142,7 +145,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
   data.keyEvidence.forEach((ev, i) => {
     doc.setFontSize(8);
     doc.setTextColor(...REPORT_STYLES.greenColor);
-    doc.text('\u2713', REPORT_STYLES.margin, yPos);
+    doc.text('[+]', REPORT_STYLES.margin, yPos);
     doc.setTextColor(...REPORT_STYLES.textColor);
     doc.text(ev, REPORT_STYLES.margin + 5, yPos);
     yPos += 5;
@@ -172,6 +175,42 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
   const verdictLines = doc.splitTextToSize(data.finalVerdict, REPORT_STYLES.pageWidth - 2 * REPORT_STYLES.margin);
   doc.text(verdictLines, REPORT_STYLES.margin, yPos);
 
+  // PAGE 2: REVERSE PROMPT (if AI-generated or Edited)
+  if (data.reversePrompt) {
+    yPos += verdictLines.length * 5 + 15;
+    if (yPos > REPORT_STYLES.pageHeight - 60) {
+      doc.addPage();
+      yPos = REPORT_STYLES.margin;
+    }
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...REPORT_STYLES.primaryColor);
+    doc.text('REVERSE ENGINEERED PROMPT', REPORT_STYLES.margin, yPos);
+    yPos += 7;
+
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Reconstructed text prompt that likely generated this image:', REPORT_STYLES.margin, yPos);
+    yPos += 5;
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...REPORT_STYLES.textColor);
+    const promptLines = doc.splitTextToSize(`"${data.reversePrompt}"`, REPORT_STYLES.pageWidth - 2 * REPORT_STYLES.margin);
+    doc.text(promptLines, REPORT_STYLES.margin, yPos);
+    yPos += promptLines.length * 5 + 5;
+
+    if (data.reversePromptStyle) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Estimated Style: ', REPORT_STYLES.margin, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.text(data.reversePromptStyle, REPORT_STYLES.margin + 30, yPos);
+      yPos += 6;
+    }
+    yPos += 5;
+  }
+
   // PAGE 3: INTEGRITY
   doc.addPage();
   yPos = REPORT_STYLES.margin;
@@ -190,7 +229,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
     ['File Hash (SHA-256)', data.hash || 'Not available'],
     ['Classification', data.classification],
     ['Confidence', data.confidenceLevel],
-    ['System', 'ForensicTrace v2.4.0 / Gemini 2.0 Flash'],
+    ['System', 'ForensicTrace v2.4.0 / NVIDIA LLaMA 3.2 90B Vision'],
   ];
 
   autoTable(doc, {
@@ -214,7 +253,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
     ['Action', 'Timestamp', 'System'],
     ['File Ingested', date, 'ForensicTrace v2.4.0'],
     ['Metadata Extracted', date, 'ForensicTrace v2.4.0'],
-    ['AI Analysis (Gemini)', date, 'Gemini 2.0 Flash'],
+    ['AI Analysis (HF Aya Vision + NVIDIA LLaMA)', date, 'HF Aya Vision 32B + NVIDIA LLaMA 3.2 90B Vision'],
     ['Report Generated', date, 'ForensicTrace v2.4.0'],
   ];
 
@@ -244,7 +283,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
     doc.setPage(i);
     doc.setFontSize(6);
     doc.setTextColor(100, 100, 100);
-    doc.text(`FORENSICTRACE \u2014 ${caseId}`, REPORT_STYLES.pageWidth - REPORT_STYLES.margin, REPORT_STYLES.pageHeight - 10, { align: 'right' });
+    doc.text(`FORENSICTRACE -- ${caseId}`, REPORT_STYLES.pageWidth - REPORT_STYLES.margin, REPORT_STYLES.pageHeight - 10, { align: 'right' });
     doc.text(`Page ${i}`, REPORT_STYLES.margin, REPORT_STYLES.pageHeight - 10);
   }
 

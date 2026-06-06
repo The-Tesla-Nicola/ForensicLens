@@ -1,19 +1,25 @@
-// Run: node test-accuracy.js
+// Run: node test-accuracy.mjs
 // Sends images to the API and logs accuracy results
 
-const fs = require('fs');
-const path = require('path');
-const http = require('http');
+import fs from 'fs';
+import path from 'path';
+import http from 'http';
 
 const TEST_DIR = './test-images';
 const results = [];
+
+function getMimeType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+  return mimeTypes[ext] || 'image/jpeg';
+}
 
 function testImage(filePath, expected) {
   const imageBuffer = fs.readFileSync(filePath);
   const base64 = imageBuffer.toString('base64');
 
   return new Promise((resolve) => {
-    const data = JSON.stringify({ imageBase64: base64, mimeType: 'image/jpeg' });
+    const data = JSON.stringify({ imageBase64: base64, mimeType: getMimeType(filePath) });
     const options = {
       hostname: 'localhost',
       port: 3000,
@@ -28,19 +34,25 @@ function testImage(filePath, expected) {
       res.on('end', () => {
         try {
           const result = JSON.parse(body);
-          results.push({
-            file: path.basename(filePath),
-            expected,
-            got: result.classification,
-            confidence: result.confidenceLevel,
-            aiScore: result.aiLikelihood,
-            realScore: result.realLikelihood,
-            elaScore: result.elaScore,
-            elaInterpretation: result.elaInterpretation,
-            correct: result.classification === expected
-          });
+          if (result.error) {
+            console.log(`  API error for ${path.basename(filePath)}: ${result.error}`);
+            results.push({ file: path.basename(filePath), expected, error: result.error });
+          } else {
+            results.push({
+              file: path.basename(filePath),
+              expected,
+              got: result.classification,
+              confidence: result.confidenceLevel,
+              aiScore: result.aiLikelihood,
+              realScore: result.realLikelihood,
+              editedScore: result.editedLikelihood,
+              elaScore: result.elaScore,
+              elaInterpretation: result.elaInterpretation,
+              correct: result.classification === expected
+            });
+          }
         } catch (e) {
-          results.push({ file: path.basename(filePath), expected, error: body.substring(0, 100) });
+          results.push({ file: path.basename(filePath), expected, error: `Parse error: ${body.substring(0, 100)}` });
         }
         resolve();
       });
@@ -49,6 +61,7 @@ function testImage(filePath, expected) {
       results.push({ file: path.basename(filePath), expected, error: e.message });
       resolve();
     });
+    req.setTimeout(300000, () => { req.destroy(); results.push({ file: path.basename(filePath), expected, error: 'Timeout' }); resolve(); });
     req.write(data);
     req.end();
   });
@@ -67,6 +80,7 @@ async function run() {
     const files = fs.readdirSync(dirPath).filter(f => /\.(jpg|png|webp)$/i.test(f));
     for (const f of files) {
       await testImage(path.join(dirPath, f), cat.expected);
+      await new Promise(r => setTimeout(r, 8000));
     }
   }
 
