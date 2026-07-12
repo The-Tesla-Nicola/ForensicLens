@@ -1,8 +1,9 @@
 {
-  "name": "RPE BY HARISH",
+  "name": "ForensicTrace",
   "description": "Professional Digital Forensics and AI Image Detection tool using advanced multimodal analysis.",
   "requestFramePermissions": [],
   "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+    "MAJOR_CAPABILITY_SERVER_SIDE_NVIDIA_API",
+    "MAJOR_CAPABILITY_SERVER_SIDE_HUGGINGFACE_API"
   ]
 }

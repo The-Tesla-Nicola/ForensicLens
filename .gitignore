@@ -4,7 +4,22 @@ dist/
 coverage/
 .DS_Store
 *.log
-.env*
+.env
+.env.local
+.env.development
+.env.production
 !.env.example
+
+# Test files
 test-images/results/
 test-internet.mjs
+
+# AI tool files
+.aider*
+.claudex-profile.json
+
+# Runtime files
+server_stderr.log
+server_stdout.log
+files.zip
+extracted_files/

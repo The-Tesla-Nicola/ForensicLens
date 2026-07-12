@@ -1,5 +1,4 @@
-// Run: node test-accuracy.mjs
-// Sends images to the API and logs accuracy results
+// Accuracy test: sends images to API and logs results
 
 import fs from 'fs';
 import path from 'path';

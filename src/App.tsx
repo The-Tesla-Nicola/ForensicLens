@@ -115,7 +115,7 @@ export default function App() {
   const [reversePromptResult, setReversePromptResult] = useState<any>(null);
   const [isReversePromptLoading, setIsReversePromptLoading] = useState(false);
   
-  // Batch State
+  // Batch state
   const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
   const [viewMode, setViewMode] = useState<'single' | 'batch'>('single');
   const [sortField, setSortField] = useState<SortField>('timestamp');
@@ -166,7 +166,7 @@ export default function App() {
       setError(null);
       setViewMode('single');
       
-      // Extract EXIF via server
+      // Extract EXIF
       const base64Data = base64.split(',')[1];
       if (base64Data) {
         fetch('/api/metadata', {
@@ -226,7 +226,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isAnalyzing]);
 
-  // Persist batch results to localStorage
+  // Persist batch results
   useEffect(() => {
     try {
       localStorage.setItem('ft_batchResults', JSON.stringify(batchResults));
@@ -239,7 +239,7 @@ export default function App() {
     } catch { /* ignore */ }
   }, [caseHistory]);
 
-  // Restore batch results from localStorage on mount
+  // Restore batch results on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem('ft_batchResults');
@@ -586,7 +586,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#050505] text-[#E4E3E0] font-sans selection:bg-[#F27D26] selection:text-white">
       
-      {/* HUD Header */}
+      {/* Header */}
       <header className="border-b border-[#141414] p-4 flex justify-between items-center bg-[#050505]/80 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div className="bg-[#F27D26] p-1.5 rounded">
@@ -715,7 +715,7 @@ export default function App() {
           <>
             {viewMode === 'single' ? (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                {/* Single View Logic (Same as before but with selectedImage handling) */}
+                {/* Single View */}
                 <div className="lg:col-span-7 space-y-6">
                   <div className="relative rounded-2xl overflow-hidden border border-[#141414] bg-black group shadow-2xl">
                     <img 
@@ -925,7 +925,7 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Batch Dashboard Controls */}
+                {/* Batch Controls */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#0A0A0A] p-4 rounded-xl border border-[#141414]">
                   <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2 text-xs uppercase tracking-widest font-mono text-[#F27D26]">

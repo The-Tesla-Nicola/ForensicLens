@@ -10,7 +10,7 @@
 - Maximum file size: 15MB
 - Supported formats: JPEG, PNG, WebP
 - Batch processing: sequential (no parallel)
-- No offline analysis (requires Gemini API)
+- No offline analysis (requires NVIDIA + HuggingFace API)
 
 ## Prompt Analysis (Experimental)
 - Does NOT recover the original prompt

@@ -11,13 +11,13 @@ import exifr from 'exifr';
 
 dotenv.config();
 
-// --- Config ---
+// Config
 const NV_API_KEY = process.env.NV_API_KEY || "";
 const NV_BASE_URL = process.env.NV_BASE_URL || "https://integrate.api.nvidia.com/v1";
 const NV_MODEL = process.env.NV_MODEL || "meta/llama-3.2-90b-vision-instruct";
 const HF_API_KEY = process.env.hugging_face_api || "";
 
-// --- Fetch with retry (handles transient ConnectTimeoutError) ---
+// Fetch with retry
 async function fetchWithRetry(url: string, opts: any, retries = 2, delayMs = 3000): Promise<Response> {
   let lastErr: any;
   for (let i = 0; i <= retries; i++) {
@@ -37,11 +37,11 @@ async function fetchWithRetry(url: string, opts: any, retries = 2, delayMs = 300
   throw lastErr;
 }
 
-// --- HuggingFace AI Detector (Aya Vision 32B, 2-pass majority vote) ---
+// HF AI detector (Aya Vision 32B, 2-pass vote)
 async function detectAIImage(base64: string, mimeType: string): Promise<{ label: string; confidence: number; raw: string }> {
   if (!HF_API_KEY) return { label: 'unknown', confidence: 0, raw: '' };
 
-  // Resize for HF API limit
+  // Resize for HF API
   let smallBase64 = base64;
   try {
     const buffer = Buffer.from(base64, 'base64');
@@ -124,9 +124,9 @@ Respond with ONLY this JSON:
   return { label: sorted[0][0], confidence: sorted[0][1] / votes.length, raw: votes.join(',') };
 }
 
-// --- NVIDIA API: Single analysis pass ---
+// NVIDIA API: Single analysis pass
 async function runAnalysisPass(prompt: string, systemMsg: string, dataUri: string, temperature: number): Promise<any> {
-  // Resize for NVIDIA API
+  // Resize for NVIDIA
   let optimizedDataUri = dataUri;
   try {
     const match = dataUri.match(/^data:(.*);base64,(.*)$/);
@@ -168,7 +168,7 @@ async function runAnalysisPass(prompt: string, systemMsg: string, dataUri: strin
   return analysis;
 }
 
-// --- Post-process: normalize likelihoods, reconcile ---
+// Post-process: normalize likelihoods
 function postProcessAnalysis(analysis: any): any {
   analysis.aiLikelihood = Math.min(100, Math.max(0, analysis.aiLikelihood ?? 50));
   analysis.realLikelihood = Math.min(100, Math.max(0, analysis.realLikelihood ?? 0));
@@ -237,7 +237,7 @@ function mergeAnalyses(results: any[], majority: string): any {
   };
 }
 
-// --- Error Level Analysis ---
+// Error Level Analysis
 async function performELA(buffer: Buffer, mimeType: string): Promise<{ score: number | null; interpretation: string | null }> {
   try {
     const reSavedBuffer = await sharp(buffer).jpeg({ quality: 95 }).toBuffer();
@@ -276,7 +276,7 @@ async function performELA(buffer: Buffer, mimeType: string): Promise<{ score: nu
   }
 }
 
-// --- JSON parsing helpers ---
+// JSON parsing helpers
 function extractJsonFromResponse(text: string): any {
   try { const p = JSON.parse(text); if (p.classification) return p; } catch {}
   const cb = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
@@ -327,7 +327,7 @@ function parseNvidiaResponse(text: string): any {
   return result;
 }
 
-// --- Reverse Prompt JSON parser ---
+// Reverse prompt JSON parser
 function parseReversePromptJson(rawText: string): any {
   let result: any = null;
   try { result = JSON.parse(rawText); } catch {}
@@ -342,7 +342,7 @@ function parseReversePromptJson(rawText: string): any {
   return result?.prompt ? result : null;
 }
 
-// --- Resize helper ---
+// Resize helper
 async function resizeImage(dataUri: string, maxWidth = 768, quality = 80): Promise<string> {
   try {
     const match = dataUri.match(/^data:(.*);base64,(.*)$/);
@@ -353,7 +353,7 @@ async function resizeImage(dataUri: string, maxWidth = 768, quality = 80): Promi
   } catch { return dataUri; }
 }
 
-// --- Main server ---
+// Main server
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -370,7 +370,7 @@ async function startServer() {
 
   app.use('/api/analyze', (req, _res, next) => { req.setTimeout(600000); next(); });
 
-  // --- Source download ---
+  // Source download
   app.get("/api/download-source", apiKeyGuard, (_req, res) => {
     try {
       const zip = new AdmZip();
@@ -389,7 +389,7 @@ async function startServer() {
   const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const MAX_BASE64_LENGTH = 15 * 1024 * 1024;
 
-  // --- Analysis prompt ---
+  // Analysis prompt
   const ANALYSIS_PROMPT = `You are a forensic image analyst. Classify this image as REAL, AI-GENERATED, or EDITED.
 
 ABSOLUTE RULES:
@@ -434,7 +434,7 @@ DEEP SCAN CONSTRAINTS:
 - Weight definitive errors heavily
 - Distinguish compression artifacts from AI artifacts`;
 
-  // --- Main analysis endpoint ---
+  // Main analysis endpoint
   app.post("/api/analyze", analysisLimiter, async (req, res) => {
     try {
       const { imageBase64, mimeType, deepScan, extractStyle } = req.body;
@@ -521,7 +521,7 @@ DEEP SCAN CONSTRAINTS:
       const elaUniform = elaResult.interpretation === 'uniform';
       const nvClass = finalAnalysis.classification;
 
-      // --- Combined voting: NVIDIA + HF + ELA + EXIF ---
+      // Combined voting: NVIDIA + HF + ELA + EXIF
       if (hasCameraExif && nvClass !== 'Real') {
         // EXIF camera data → Real
         finalAnalysis.classification = 'Real';
@@ -547,7 +547,7 @@ DEEP SCAN CONSTRAINTS:
         else if (nvClass === 'Edited') finalAnalysis.editedLikelihood = Math.min(100, finalAnalysis.editedLikelihood + 10);
       }
 
-      // --- Reverse prompt for AI/Edited images ---
+      // Reverse prompt for AI/Edited images
       let reversePromptResult: any = null;
       if (finalAnalysis.classification === 'AI-generated' || finalAnalysis.classification === 'Edited') {
         try {
@@ -599,7 +599,7 @@ DEEP SCAN CONSTRAINTS:
     }
   });
 
-  // --- Metadata extraction ---
+  // Metadata extraction
   app.post("/api/metadata", async (req, res) => {
     try {
       const { imageBase64 } = req.body;
@@ -638,7 +638,7 @@ DEEP SCAN CONSTRAINTS:
     }
   });
 
-  // --- Reverse prompt endpoint ---
+  // Reverse prompt endpoint
   app.post("/api/reverse-prompt", analysisLimiter, async (req, res) => {
     try {
       const { imageBase64, mimeType } = req.body;
@@ -681,7 +681,7 @@ DEEP SCAN CONSTRAINTS:
     }
   });
 
-  // --- Vite dev server / static files ---
+  // Vite dev server / static files
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);

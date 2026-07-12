@@ -1,5 +1,4 @@
-// Run: node test-deep.mjs
-// Tests with deepScan=true (3-pass ensemble voting)
+// Deep scan test: 3-pass ensemble voting
 import fs from 'fs';
 import path from 'path';
 import http from 'http';

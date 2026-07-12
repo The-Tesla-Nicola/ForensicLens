@@ -1,6 +1,10 @@
 import fs from 'fs';
 
-const HF_KEY = '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';
+const HF_KEY = process.env.HF_API_KEY || process.env.hugging_face_api;
+if (!HF_KEY) {
+  console.error('Set HF_API_KEY or hugging_face_api env var first');
+  process.exit(1);
+}
 const img = fs.readFileSync('./test-images/ai/OIP (3).webp');
 const b64 = img.toString('base64');
 

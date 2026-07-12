@@ -28,7 +28,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
     dateStyle: 'long', timeStyle: 'short'
   });
 
-  // PAGE 1: HEADER
+  // Header
   doc.setFillColor(...REPORT_STYLES.darkBg);
   doc.rect(0, 0, REPORT_STYLES.pageWidth, REPORT_STYLES.headerHeight, 'F');
 
@@ -47,7 +47,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
   doc.setTextColor(150, 150, 150);
   doc.text(`Generated: ${date}`, REPORT_STYLES.pageWidth - REPORT_STYLES.margin, 35, { align: 'right' });
 
-  // PAGE 1: IMAGE
+  // Evidence image
   let yPos = REPORT_STYLES.headerHeight + 10;
   if (imageBase64) {
     try {
@@ -58,7 +58,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
     }
   }
 
-  // PAGE 1: VERDICT TABLE
+  // Verdict table
   const verdictBg =
     data.classification === 'AI-generated' ? REPORT_STYLES.redColor :
     data.classification === 'Real' ? REPORT_STYLES.greenColor :
@@ -108,7 +108,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
 
   yPos = (doc as any).lastAutoTable.finalY + 15;
 
-  // PAGE 1: SOURCE
+  // Source info
   if (data.mostLikelySource) {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
@@ -120,7 +120,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
     yPos += 10;
   }
 
-  // PAGE 1: FORENSIC SUMMARY
+  // Forensic summary
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('Forensic Summary', REPORT_STYLES.margin, yPos);
@@ -131,7 +131,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
   doc.text(summaryLines, REPORT_STYLES.margin, yPos);
   yPos += summaryLines.length * 5 + 10;
 
-  // PAGE 2: EVIDENCE / ISSUES
+  // Evidence and issues
   doc.addPage();
   yPos = REPORT_STYLES.margin;
 
@@ -163,7 +163,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
 
   yPos += 10;
 
-  // PAGE 2: FINAL VERDICT
+  // Final verdict
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...REPORT_STYLES.primaryColor);
@@ -175,7 +175,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
   const verdictLines = doc.splitTextToSize(data.finalVerdict, REPORT_STYLES.pageWidth - 2 * REPORT_STYLES.margin);
   doc.text(verdictLines, REPORT_STYLES.margin, yPos);
 
-  // PAGE 2: REVERSE PROMPT (if AI-generated or Edited)
+  // Reverse prompt
   if (data.reversePrompt) {
     yPos += verdictLines.length * 5 + 15;
     if (yPos > REPORT_STYLES.pageHeight - 60) {
@@ -211,7 +211,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
     yPos += 5;
   }
 
-  // PAGE 3: INTEGRITY
+  // Integrity page
   doc.addPage();
   yPos = REPORT_STYLES.margin;
 
@@ -278,7 +278,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
   const discLines = doc.splitTextToSize(disclaimer, REPORT_STYLES.pageWidth - 2 * REPORT_STYLES.margin);
   doc.text(discLines, REPORT_STYLES.margin, yPos);
 
-  // Watermark every page
+  // Watermark
   for (let i = 1; i <= doc.getNumberOfPages(); i++) {
     doc.setPage(i);
     doc.setFontSize(6);
