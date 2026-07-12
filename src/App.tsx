@@ -418,7 +418,7 @@ export default function App() {
       hfDetection: data.hfDetection || (item as any)?.hfDetection || null,
     }, img);
 
-    doc.save(`ForensicTrace_Report_${Date.now()}.pdf`);
+    doc.save(`ForensicLens_Report_${Date.now()}.pdf`);
   };
 
   const exportCaseArchive = async () => {
@@ -463,7 +463,7 @@ export default function App() {
       Status: r.status,
     })));
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, `ForensicTrace_Batch_${Date.now()}.csv`);
+    saveAs(blob, `ForensicLens_Batch_${Date.now()}.csv`);
   };
 
   const exportBatchPDF = () => {
@@ -474,7 +474,7 @@ export default function App() {
     doc.rect(0, 0, 210, 50, 'F');
     doc.setTextColor(...REPORT_STYLES.primaryColor);
     doc.setFontSize(24);
-    doc.text('FORENSICTRACE', 15, 25);
+    doc.text('FORENSICLENS', 15, 25);
     doc.setFontSize(10);
     doc.setTextColor(...REPORT_STYLES.textColor);
     doc.text(`Batch Analysis Report — ${batchResults.length} images`, 15, 35);
@@ -515,7 +515,7 @@ export default function App() {
       margin: { left: 15, right: 15 },
     });
 
-    doc.save(`ForensicTrace_Batch_${caseId}.pdf`);
+    doc.save(`ForensicLens_Batch_${caseId}.pdf`);
   };
 
   const exportBatchArchive = async () => {
@@ -566,7 +566,7 @@ export default function App() {
     }, null, 2));
 
     const content = await zip.generateAsync({ type: 'blob' });
-    saveAs(content, `ForensicTrace_Archive_${caseId}.zip`);
+    saveAs(content, `ForensicLens_Archive_${caseId}.zip`);
   };
 
   const reset = () => {
@@ -593,7 +593,7 @@ export default function App() {
             <Fingerprint className="w-6 h-6 text-black" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tighter uppercase">ForensicTrace</h1>
+            <h1 className="text-xl font-bold tracking-tighter uppercase">ForensicLens</h1>
             <p className="text-[10px] uppercase tracking-[0.2em] opacity-50 font-mono">Digital Image Forensics Tool v2.4.0</p>
           </div>
         </div>

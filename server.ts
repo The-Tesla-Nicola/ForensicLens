@@ -381,7 +381,7 @@ async function startServer() {
       const srcPath = path.join(root, "src");
       if (fs.existsSync(srcPath)) zip.addLocalFolder(srcPath, "src");
       res.set('Content-Type', 'application/zip');
-      res.set('Content-Disposition', 'attachment; filename=ForensicTrace_Source.zip');
+      res.set('Content-Disposition', 'attachment; filename=ForensicLens_Source.zip');
       res.send(zip.toBuffer());
     } catch { res.status(500).send("Failed to generate source zip"); }
   });
@@ -691,7 +691,7 @@ DEEP SCAN CONSTRAINTS:
     app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
-  app.listen(PORT, "0.0.0.0", () => console.log(`ForensicTrace running on http://localhost:${PORT}`));
+  app.listen(PORT, "0.0.0.0", () => console.log(`ForensicLens running on http://localhost:${PORT}`));
 }
 
 startServer();

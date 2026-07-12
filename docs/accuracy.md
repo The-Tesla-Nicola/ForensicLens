@@ -1,4 +1,4 @@
-# ForensicTrace Accuracy Baseline
+# ForensicLens Accuracy Baseline
 
 Date: Pending — run `node test-accuracy.js` with a populated test set
 Test images: Required — populate `test-images/real/`, `test-images/ai/`, `test-images/edited/`

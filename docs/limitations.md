@@ -1,4 +1,4 @@
-# ForensicTrace — Known Limitations
+# ForensicLens — Known Limitations
 
 ## Detection Accuracy
 - Current accuracy: ~83% (see accuracy.md)

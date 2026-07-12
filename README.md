@@ -1,4 +1,4 @@
-# ForensicTrace
+# ForensicLens
 
 Professional digital image forensics tool for detecting AI-generated, edited, and authentic images.
 
@@ -21,7 +21,7 @@ Professional digital image forensics tool for detecting AI-generated, edited, an
 
 ## Overview
 
-ForensicTrace is a web application that analyzes images to determine if they are **Real** (authentic photograph), **AI-generated** (created by generative AI), or **Edited** (digitally manipulated). It uses a multi-model approach combining cloud-based AI vision models with local forensic techniques to produce professional-grade analysis.
+ForensicLens is a web application that analyzes images to determine if they are **Real** (authentic photograph), **AI-generated** (created by generative AI), or **Edited** (digitally manipulated). It uses a multi-model approach combining cloud-based AI vision models with local forensic techniques to produce professional-grade analysis.
 
 ### Key Features
 
@@ -39,7 +39,7 @@ ForensicTrace is a web application that analyzes images to determine if they are
 
 ### Analysis Pipeline
 
-When you submit an image, ForensicTrace runs a multi-stage pipeline:
+When you submit an image, ForensicLens runs a multi-stage pipeline:
 
 ```
 Image Upload
@@ -389,7 +389,7 @@ The generated PDF forensic report contains 3 pages:
 **Page 3: Integrity & Chain of Custody**
 - Case ID, analysis date, SHA-256 hash
 - Classification and confidence
-- System identification (ForensicTrace v2.4.0 / NVIDIA LLaMA 3.2 90B Vision)
+- System identification (ForensicLens v2.4.0 / NVIDIA LLaMA 3.2 90B Vision)
 - Chain of custody log (ingestion, metadata extraction, AI analysis, report generation)
 - Legal disclaimer
 - Watermark on every page
@@ -403,7 +403,7 @@ Each analysis generates a unique case ID: `FG-<timestamp>-<random>`
 ## Project Structure
 
 ```
-ForensicTrace/
+ForensicLens/
 |
 |-- server.ts                    # Express server with all API endpoints
 |                                   - Image validation and resize
@@ -511,4 +511,4 @@ ForensicTrace/
 
 ---
 
-*ForensicTrace v2.4.0*
+*ForensicLens v2.4.0*

@@ -35,7 +35,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
   doc.setTextColor(...REPORT_STYLES.primaryColor);
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text('FORENSICTRACE', REPORT_STYLES.margin, 22);
+  doc.text('FORENSICLENS', REPORT_STYLES.margin, 22);
 
   doc.setTextColor(...REPORT_STYLES.textColor);
   doc.setFontSize(8);
@@ -229,7 +229,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
     ['File Hash (SHA-256)', data.hash || 'Not available'],
     ['Classification', data.classification],
     ['Confidence', data.confidenceLevel],
-    ['System', 'ForensicTrace v2.4.0 / NVIDIA LLaMA 3.2 90B Vision'],
+    ['System', 'ForensicLens v2.4.0 / NVIDIA LLaMA 3.2 90B Vision'],
   ];
 
   autoTable(doc, {
@@ -251,10 +251,10 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
 
   const custodyLog = [
     ['Action', 'Timestamp', 'System'],
-    ['File Ingested', date, 'ForensicTrace v2.4.0'],
-    ['Metadata Extracted', date, 'ForensicTrace v2.4.0'],
+    ['File Ingested', date, 'ForensicLens v2.4.0'],
+    ['Metadata Extracted', date, 'ForensicLens v2.4.0'],
     ['AI Analysis (HF Aya Vision + NVIDIA LLaMA)', date, 'HF Aya Vision 32B + NVIDIA LLaMA 3.2 90B Vision'],
-    ['Report Generated', date, 'ForensicTrace v2.4.0'],
+    ['Report Generated', date, 'ForensicLens v2.4.0'],
   ];
 
   autoTable(doc, {
@@ -283,7 +283,7 @@ export function generateForensicReport(data: PDFData, imageBase64?: string): jsP
     doc.setPage(i);
     doc.setFontSize(6);
     doc.setTextColor(100, 100, 100);
-    doc.text(`FORENSICTRACE -- ${caseId}`, REPORT_STYLES.pageWidth - REPORT_STYLES.margin, REPORT_STYLES.pageHeight - 10, { align: 'right' });
+    doc.text(`FORENSICLENS -- ${caseId}`, REPORT_STYLES.pageWidth - REPORT_STYLES.margin, REPORT_STYLES.pageHeight - 10, { align: 'right' });
     doc.text(`Page ${i}`, REPORT_STYLES.margin, REPORT_STYLES.pageHeight - 10);
   }
 
